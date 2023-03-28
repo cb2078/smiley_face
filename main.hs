@@ -35,6 +35,7 @@ data Cog = Cog { hp :: Integer, cogEffects :: [Effect] }
 newCog :: Cog
 newCog = Cog 0 []
 
+canKnockback :: Gag -> Bool
 canKnockback gag = gagTrack gag `elem` [Throw, Squirt]
 
 applyDamage :: Integer -> Cog -> Cog
