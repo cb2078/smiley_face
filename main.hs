@@ -21,7 +21,33 @@ gagDamage = [[12, 24, 30, 45, 60, 84, 90, 135], -- toon up
 gags = [Gag (toEnum i :: GagTrack) damage  prestige []
          | i <- [0 .. 7], damage <- gagDamage !! i, prestige <- [False, True]]
 
+-- needed for combos
+groupGags :: [Gag] -> [[Gag]]
+groupGags = groupBy $ \ x y -> gagTrack x == gagTrack y
+
+-- these are the only effects that can't exist at the start of a round
+gagEffect :: GagTrack -> Maybe Effect
+gagEffect Trap = Just Dazed
+gagEffect Throw = Just Marked
+gagEffect _ = Nothing
+
 data Cog = Cog { hp :: Integer, cogEffects :: [Effect] }
          deriving Show
 newCog :: Cog
 newCog = Cog 0 []
+
+canKnockback gag = gagTrack gag `elem` [Throw, Squirt]
+
+applyDamage :: Integer -> Cog -> Cog
+applyDamage dmg cog = Cog (dmg + hp cog) (cogEffects cog)
+
+-- TODO use set instead of list here
+applyEffect :: Effect -> Cog -> Cog
+applyEffect effect cog = Cog (hp cog) (nub $ effect:cogEffects cog)
+
+-- TODO take in a list of gags (of the same track) for combos
+applyGag :: Gag -> Cog -> Cog
+applyGag gag = maybe id applyEffect effect . applyDamage dmg
+  where
+    dmg = damage gag
+    effect = gagEffect $ gagTrack gag
