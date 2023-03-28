@@ -20,3 +20,8 @@ gagDamage = [[12, 24, 30, 45, 60, 84, 90, 135], -- toon up
              [8, 12, 35, 56, 90, 140, 200, 240]] -- drop
 gags = [Gag (toEnum i :: GagTrack) damage  prestige []
          | i <- [0 .. 7], damage <- gagDamage !! i, prestige <- [False, True]]
+
+data Cog = Cog { hp :: Integer, cogEffects :: [Effect] }
+         deriving Show
+newCog :: Cog
+newCog = Cog 0 []
