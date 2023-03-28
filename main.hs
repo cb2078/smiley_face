@@ -1,8 +1,7 @@
 import Data.List
 
-data CogEffect = Marked | Soaked | Lured
-data ToonEffect = Winded | Encore | PresEncore
-
+data Effect = Dazed | Marked | Soaked | Lured | Winded | Encore
+              deriving (Eq, Show)
 data GagTrack = ToonUp | Trap | Lure | Throw | Zap | Squirt | Sound | Drop
               deriving (Eq, Ord, Enum, Show)
 type Gag = (GagTrack, Int, Bool) -- track damage prestige
