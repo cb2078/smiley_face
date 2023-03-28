@@ -1,14 +1,14 @@
 import Data.List
 
 data Effect = Dazed | Marked | Soaked | Lured | Winded | Encore
-              deriving (Eq, Show)
+              deriving (Eq, Ord, Show)
 data GagTrack = ToonUp | Trap | Lure | Throw | Zap | Squirt | Sound | Drop
               deriving (Eq, Ord, Enum, Show)
 data Gag = Gag { gagTrack :: GagTrack,
                  damage :: Integer,
                  prestige :: Bool,
                  gagEffects :: [Effect] }
-         deriving Show
+         deriving (Eq, Ord, Show)
 
 gagDamage = [[12, 24, 30, 45, 60, 84, 90, 135], -- toon up
              [5, 10, 15, 30, 55, 45, 100, 75], -- lure
@@ -51,3 +51,6 @@ applyGag gag = maybe id applyEffect effect . applyDamage dmg
   where
     dmg = damage gag
     effect = gagEffect $ gagTrack gag
+
+applyGags :: [Gag] -> Cog -> Cog
+applyGags = flip (foldr applyGag) . reverse . sort
