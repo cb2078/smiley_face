@@ -1,18 +1,5 @@
 import Data.List
 
-data Cog = Cog Int | Exe Int
-
-cogLevels = [1..20]
-
-cogHP = sort $ nub [ty n | ty <- [regular, feildSpecialist, operationsAnalyst],
-                           n <- cogLevels]
-  where
-    regular n = (n + 1) * (n + 2)
-    feildSpecialist n = n * (n + 1) + 1
-    operationsAnalyst n = (n + 2) * (n + 3) - 2
-exeHP = map (ceiling . (1.5*) . fromIntegral) cogHP
-managerHP = [240, 320, 465, 600]
-
 data CogEffect = Marked | Soaked | Lured
 data ToonEffect = Winded | Encore | PresEncore
 
