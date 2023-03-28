@@ -39,7 +39,10 @@ canKnockback :: Gag -> Bool
 canKnockback gag = gagTrack gag `elem` [Throw, Squirt]
 
 applyDamage :: Integer -> Cog -> Cog
-applyDamage dmg cog = Cog (dmg + hp cog) (cogEffects cog)
+applyDamage dmg cog = Cog (dmg' + hp cog) (cogEffects cog)
+  where
+    marked = if Marked `elem` cogEffects cog then 1.1 else 1.0
+    dmg' = ceiling . (marked*) . fromIntegral $ dmg
 
 -- TODO use set instead of list here
 applyEffect :: Effect -> Cog -> Cog
