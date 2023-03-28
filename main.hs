@@ -48,12 +48,14 @@ applyDamage dmg cog = Cog (dmg' + hp cog) (cogEffects cog)
 applyEffect :: Effect -> Cog -> Cog
 applyEffect effect cog = Cog (hp cog) (nub $ effect:cogEffects cog)
 
--- TODO take in a list of gags (of the same track) for combos
-applyGag :: Gag -> Cog -> Cog
-applyGag gag = maybe id applyEffect effect . applyDamage dmg
+applyGagTracks :: [Gag] -> Cog -> Cog
+applyGagTracks gags = maybe id applyEffect effect . applyDamage dmg
   where
-    dmg = damage gag
-    effect = gagEffect $ gagTrack gag
+    dmg = foldr1 (+) . map damage $ gags
+    effect = gagEffect . gagTrack $ head gags
+
+applyGag :: Gag -> Cog -> Cog
+applyGag gag = applyGagTracks [gag] 
 
 applyGags :: [Gag] -> Cog -> Cog
-applyGags = flip (foldr applyGag) . reverse . sort
+applyGags = flip (foldr applyGagTracks) . groupGags . reverse . sort
