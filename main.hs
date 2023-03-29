@@ -66,3 +66,21 @@ applyGag gag = applyGagTracks [gag]
 
 applyGags :: [Gag] -> Cog -> Cog
 applyGags = flip (foldr applyGagTracks) . groupGags . reverse . sort
+
+-- testing
+fruitPie = (!!8) $ filter ((Throw==) . gagTrack) gags
+seltzer = (!!8) $ filter ((Squirt==) . gagTrack) gags
+bowlingBall = (!!4) $ filter ((Drop==) . gagTrack) gags
+
+type Test = ([Gag], Integer)
+tests :: [Test]
+tests = [([seltzer, seltzer], 72),
+         ([fruitPie, fruitPie], 135),
+         ([bowlingBall, bowlingBall], 91)]
+runTests :: [Bool]
+runTests = map (uncurry test) tests
+  where test = (==) . hp . flip applyGags newCog
+
+main :: IO ()
+main = do
+  putStrLn $ show runTests
