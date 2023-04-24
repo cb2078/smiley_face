@@ -93,6 +93,15 @@ findCombos tracks players = map f . filter ((<=players) . length) . subsequences
     pred gag = elem (gagTrack gag) tracks && (not . prestige) gag
     f gags = (hp $ applyGags gags newCog, gags)
 
+cogLevels = [1..20]
+
+addExes :: [Integer] -> [Integer]
+addExes hps = (-:) <$> [id, (1.5*)] <*> hps
+
+cogHPs = addExes $ (\ n -> (n + 1) * (n + 2)) <$> cogLevels
+lbHPs = addExes $ [(\ n -> (n * (n + 1) + 1)), (\ n -> (n + 2) * (n + 3) - 2)] <*> cogLevels
+mgrHPs = flip elem $ [240, 320, 465, 600]
+
 main :: IO ()
 main = do
   guard (all id runTests)
