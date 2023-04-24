@@ -47,18 +47,21 @@ applyDamage :: Integer -> Cog -> Cog
 applyDamage dmg cog = Cog (dmg' + hp cog) (cogEffects cog)
   where
     marked = if Marked `elem` cogEffects cog then 1.1 else 1.0
-    dmg' = ceiling . (marked*) . fromIntegral $ dmg
+    dmg' = (marked*) -: dmg
 
 -- TODO use set instead of list here
 applyEffect :: Effect -> Cog -> Cog
 applyEffect effect cog = Cog (hp cog) (nub $ effect:cogEffects cog)
+
+-- how TTCC does decimal calculations
+(-:) f x = ceiling . f . fromIntegral $ x
 
 applyGagTracks :: [Gag] -> Cog -> Cog
 applyGagTracks gags = maybe id applyEffect effect . applyDamage dmg
   where
     track = gagTrack $ head gags
     dmg = let combo = if length gags > 1 then gagCombo track else 1
-          in ceiling . (combo*) . fromIntegral $ foldr1 (+) . map damage $ gags
+          in (combo*) -: (foldr1 (+) . map damage $ gags)
     effect = gagEffect track
 
 applyGag :: Gag -> Cog -> Cog
