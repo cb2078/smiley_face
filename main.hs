@@ -7,7 +7,9 @@ data GagTrack = ToonUp | Trap | Lure | Throw | Zap | Squirt | Sound | Drop
 data Gag = Gag { gagTrack :: GagTrack,
                  damage :: Integer,
                  prestige :: Bool }
-         deriving (Eq, Ord, Show)
+         deriving (Eq, Ord)
+instance Show Gag where
+  show gag = (show $ gagTrack gag) ++ (show $ damage gag) 
 
 gagDamage = [[12, 24, 30, 45, 60, 84, 90, 135], -- toon up
              [5, 10, 15, 30, 55, 45, 100, 75], -- lure
