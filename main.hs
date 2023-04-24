@@ -90,11 +90,13 @@ runTests :: [Bool]
 runTests = map (uncurry test) tests
   where test = (==) . hp . flip applyGags newCog
 
+-- TODO this does permutation intstead of combinations with replacement
 findCombos :: [GagTrack] -> Int -> [(Integer, [Gag])]
-findCombos tracks players = map f . filter ((<=players) . length) . subsequences $ filter pred gags
+findCombos tracks players = foldMap findCombosN [1..players]
   where
     pred gag = elem (gagTrack gag) tracks && (not . prestige) gag
     f gags = (hp $ applyGags gags newCog, gags)
+    findCombosN n = map f . replicateM n $ filter pred gags
 
 cogLevels = [1..20]
 
