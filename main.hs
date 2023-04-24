@@ -1,4 +1,5 @@
 import Data.List
+import Control.Monad
 
 data Effect = Dazed | Marked | Soaked | Lured | Winded | Encore
               deriving (Eq, Ord, Show)
@@ -86,6 +87,13 @@ runTests :: [Bool]
 runTests = map (uncurry test) tests
   where test = (==) . hp . flip applyGags newCog
 
+findCombos :: [GagTrack] -> Int -> [(Integer, [Gag])]
+findCombos tracks players = map f . filter ((<=players) . length) . subsequences $ filter pred gags
+  where
+    pred gag = elem (gagTrack gag) tracks && (not . prestige) gag
+    f gags = (hp $ applyGags gags newCog, gags)
+
 main :: IO ()
 main = do
-  putStrLn $ show runTests
+  guard (all id runTests)
+  mapM_ print $ sort . findCombos [Throw,Squirt,Drop] $ 2
