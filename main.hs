@@ -108,9 +108,10 @@ cogLevels = [1..20]
 addExes :: [Integer] -> [Integer]
 addExes hps = (-:) <$> [id, (1.5*)] <*> hps
 
+cogHPs, lbHPs, mgrHPs :: [Integer]
 cogHPs = addExes $ (\ n -> (n + 1) * (n + 2)) <$> cogLevels
 lbHPs = addExes $ [(\ n -> (n * (n + 1) + 1)), (\ n -> (n + 2) * (n + 3) - 2)] <*> cogLevels
-mgrHPs = (`elem` [240, 320, 465, 600])
+mgrHPs = [240, 320, 465, 600]
 
 main :: IO ()
 main = do
