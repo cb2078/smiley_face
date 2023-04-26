@@ -47,7 +47,9 @@ gagCombo gags
     track = gagTrack $ head gags
 
 data Cog = Cog { hp :: Integer, marked :: Float, lured :: Integer }
-         deriving Show
+         deriving (Eq, Ord)
+instance Show Cog where
+  show cog = "Lure" ++ show (lured cog)
 newCog :: Cog
 newCog = Cog 0 1 0
 
