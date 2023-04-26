@@ -45,22 +45,21 @@ gagCombo gags
   where
     track = gagTrack $ head gags
 
-data Cog = Cog { hp :: Integer, cogEffects :: [Effect] }
+data Cog = Cog { hp :: Integer, marked :: Float, lured :: Integer }
          deriving Show
 newCog :: Cog
-newCog = Cog 0 []
+newCog = Cog 0 1 0
 
 canKnockback :: Gag -> Bool
 canKnockback gag = gagTrack gag `elem` [Throw, Squirt]
 
 applyDamage :: Integer -> Cog -> Cog
-applyDamage dmg cog = cog { hp = (marked*) -: dmg + hp cog }
-  where
-    marked = if Marked `elem` cogEffects cog then 1.1 else 1.0
+applyDamage dmg cog = cog { hp = (marked cog*) -: dmg + hp cog }
 
 -- TODO use set instead of list here
 applyEffect :: Effect -> Cog -> Cog
-applyEffect effect cog = cog { cogEffects = nub $ effect:cogEffects cog }
+applyEffect Marked cog = cog { marked = 1.2 }
+applyEffect _ cog = cog
 
 -- how TTCC does decimal calculations
 (-:) f x = ceiling . f . fromIntegral $ x
