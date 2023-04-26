@@ -34,6 +34,7 @@ groupGags = groupBy $ \ x y -> gagTrack x == gagTrack y
 gagEffect :: GagTrack -> Maybe Effect
 gagEffect Trap = Just Dazed
 gagEffect Throw = Just Marked
+gagEffect Lure = Just Lured
 gagEffect _ = Nothing
 
 gagCombo :: Fractional a => [Gag] -> a
@@ -56,20 +57,23 @@ canKnockback gag = gagTrack gag `elem` [Throw, Squirt]
 applyDamage :: Integer -> Cog -> Cog
 applyDamage dmg cog = cog { hp = (marked cog*) -: dmg + hp cog }
 
--- TODO use set instead of list here
-applyEffect :: Effect -> Cog -> Cog
-applyEffect Marked cog = cog { marked = 1.2 }
-applyEffect _ cog = cog
-
 -- how TTCC does decimal calculations
 (-:) f x = ceiling . f . fromIntegral $ x
 
 applyGagTracks :: [Gag] -> Cog -> Cog
-applyGagTracks gags = maybe id applyEffect effect . applyDamage dmg
+applyGagTracks gags cog = applyEffect (gagEffect track) . applyDamage dmg $ cog
   where
     track = gagTrack $ head gags
-    dmg = (*gagCombo gags) -: (foldr1 (+) . map damage) gags 
-    effect = gagEffect track
+    dmg = if track == Lure
+             then 0
+             else (*gagCombo gags) -: (foldr1 (+) . map ((lured cog+) . damage)) gags 
+    -- TODO try and make this top level function
+    applyEffect :: Maybe Effect -> Cog -> Cog
+    applyEffect effect cog =
+      case effect of
+           Just Marked -> cog { marked = 1.2, lured = 0 }
+           Just Lured -> cog { lured = foldr1 max $ map damage gags }
+           _ -> cog
 
 applyGag :: Gag -> Cog -> Cog
 applyGag gag = applyGagTracks [gag] 
