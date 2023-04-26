@@ -36,10 +36,14 @@ gagEffect Trap = Just Dazed
 gagEffect Throw = Just Marked
 gagEffect _ = Nothing
 
-gagCombo :: Fractional a => GagTrack -> a
-gagCombo track | elem track [Throw, Squirt] = 1.2
-               | track == Drop = 1.3
-               | otherwise = 1
+gagCombo :: Fractional a => [Gag] -> a
+gagCombo gags
+  | length gags == 1 = 1
+  | elem track [Throw, Squirt] = 1.2
+  | track == Drop = 1.3
+  | otherwise = 1
+  where
+    track = gagTrack $ head gags
 
 data Cog = Cog { hp :: Integer, cogEffects :: [Effect] }
          deriving Show
@@ -65,8 +69,7 @@ applyGagTracks :: [Gag] -> Cog -> Cog
 applyGagTracks gags = maybe id applyEffect effect . applyDamage dmg
   where
     track = gagTrack $ head gags
-    dmg = let combo = if length gags > 1 then gagCombo track else 1
-          in (combo*) -: (foldr1 (+) . map damage $ gags)
+    dmg = (*gagCombo gags) -: (foldr1 (+) . map damage) gags 
     effect = gagEffect track
 
 applyGag :: Gag -> Cog -> Cog
