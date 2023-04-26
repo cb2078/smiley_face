@@ -23,8 +23,8 @@ gagDamage = [[12, 24, 30, 45, 60, 84, 90, 135], -- toon up
              [4, 8, 12, 21, 30, 56, 85, 115], -- squirt
              [5, 10, 16, 23, 30, 50, 70, 90], -- sound
              [8, 12, 35, 56, 90, 140, 200, 240]] -- drop
-gags = [Gag (toEnum i :: GagTrack) damage  prestige
-         | i <- [0 .. 7], damage <- gagDamage !! i, prestige <- [False, True]]
+gags = [Gag (toEnum i :: GagTrack) damage False
+         | i <- [0 .. 7], damage <- gagDamage !! i]
 
 -- needed for combos
 groupGags :: [Gag] -> [[Gag]]
@@ -76,9 +76,9 @@ applyGags :: [Gag] -> Cog -> Cog
 applyGags = flip (foldr applyGagTracks) . groupGags . reverse . sort
 
 -- testing
-fruitPie = (!!8) $ filter ((Throw==) . gagTrack) gags
-seltzer = (!!8) $ filter ((Squirt==) . gagTrack) gags
-bowlingBall = (!!4) $ filter ((Drop==) . gagTrack) gags
+fruitPie = (!!4) $ filter ((Throw==) . gagTrack) gags
+seltzer = (!!4) $ filter ((Squirt==) . gagTrack) gags
+bowlingBall = (!!2) $ filter ((Drop==) . gagTrack) gags
 
 type Test = ([Gag], Integer)
 tests :: [Test]
@@ -98,7 +98,7 @@ combR k xxs@(x:xs) = ((x:) <$> combR (k-1) xxs) ++ combR k xs
 findCombos :: [GagTrack] -> Integer -> [(Integer, [Gag])]
 findCombos tracks players = foldMap findCombosN [1..players]
   where
-    pred gag = elem (gagTrack gag) tracks && (not . prestige) gag
+    pred gag = elem (gagTrack gag) tracks
     f gags = (hp $ applyGags gags newCog, gags)
     findCombosN n = map f . combR n $ filter pred gags
 
