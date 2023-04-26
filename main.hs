@@ -57,23 +57,24 @@ canKnockback gag = gagTrack gag `elem` [Throw, Squirt]
 applyDamage :: Integer -> Cog -> Cog
 applyDamage dmg cog = cog { hp = (marked cog*) -: dmg + hp cog }
 
+applyEffect :: Integer -> Effect -> Cog -> Cog
+applyEffect damage effect cog =
+  case effect of
+       Marked -> cog { marked = 1.2, lured = 0 }
+       Lured -> cog { lured = damage }
+       _ -> cog
+
 -- how TTCC does decimal calculations
 (-:) f x = ceiling . f . fromIntegral $ x
 
 applyGagTracks :: [Gag] -> Cog -> Cog
-applyGagTracks gags cog = applyEffect (gagEffect track) . applyDamage dmg $ cog
+applyGagTracks gags cog =
+  maybe id (applyEffect $ foldr1 max $ map damage gags) (gagEffect track)  . applyDamage dmg $ cog
   where
     track = gagTrack $ head gags
     dmg = if track == Lure
              then 0
              else (*gagCombo gags) -: (foldr1 (+) . map ((lured cog+) . damage)) gags 
-    -- TODO try and make this top level function
-    applyEffect :: Maybe Effect -> Cog -> Cog
-    applyEffect effect cog =
-      case effect of
-           Just Marked -> cog { marked = 1.2, lured = 0 }
-           Just Lured -> cog { lured = foldr1 max $ map damage gags }
-           _ -> cog
 
 applyGag :: Gag -> Cog -> Cog
 applyGag gag = applyGagTracks [gag] 
@@ -104,9 +105,13 @@ combR k xxs@(x:xs) = ((x:) <$> combR (k-1) xxs) ++ combR k xs
 findCombos :: [GagTrack] -> Integer -> [(Integer, [Gag])]
 findCombos tracks players = foldMap findCombosN [1..players]
   where
+    cogs = do
+      knockback <- gagDamage !! fromEnum Lure
+      return $ applyEffect knockback Lured newCog
     pred gag = elem (gagTrack gag) tracks
-    f gags = (hp $ applyGags gags newCog, gags)
-    findCombosN n = map f . combR n $ filter pred gags
+    f cog gags = (hp $ applyGags gags cog, gags)
+    -- TODO find a better way of doing this
+    findCombosN n = foldMap (\ cog -> map (f cog) . combR n $ filter pred gags) cogs
 
 cogLevels = [1..20]
 
