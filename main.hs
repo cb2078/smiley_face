@@ -1,6 +1,7 @@
 import Data.List
 import Data.Foldable
 import Control.Monad
+import Data.Char
 
 data Effect = Dazed | Marked | Soaked | Lured | Winded | Encore
               deriving (Eq, Ord, Show)
@@ -108,7 +109,9 @@ combR 0 _ = [[]]
 combR _ [] = []
 combR k xxs@(x:xs) = ((x:) <$> combR (k-1) xxs) ++ combR k xs 
 
-findCombos :: [GagTrack] -> Integer -> [(Integer, ([Gag], Cog))]
+type Combo = (Integer, ([Gag], Cog))
+
+findCombos :: [GagTrack] -> Integer -> [Combo]
 findCombos tracks players = foldMap findCombosN [1..players]
   where
     cogs = [newCog] ++ do
@@ -133,4 +136,7 @@ mgrHPs = [240, 320, 465, 600]
 main :: IO ()
 main = do
   guard (all id runTests)
-  mapM_ print $ filter ((`elem` cogHPs) . fst) . filter ((>0) . fst) . sort $ findCombos [Throw,Lure] 2
+  mapM_ pprint $ filter ((`elem` cogHPs) . fst) . filter ((>0) . fst) . sort $ findCombos [Throw,Lure] 2
+  where
+    pprint :: Combo -> IO ()
+    pprint (dmg, (gags, cog)) = putStrLn $ show dmg ++ " " ++ show gags ++ " " ++ show cog
