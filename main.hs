@@ -51,7 +51,7 @@ gagCombo gags
 data Cog = Cog { hp :: Integer, marked :: Float, lured :: Integer }
          deriving (Eq, Ord)
 instance Show Cog where
-  show cog = "Lure" ++ show (lured cog)
+  show cog = if lured cog == 0 then "" else "Lure" ++ show (lured cog)
 newCog :: Cog
 newCog = Cog 0 1 0
 
