@@ -111,7 +111,7 @@ combR k xxs@(x:xs) = ((x:) <$> combR (k-1) xxs) ++ combR k xs
 findCombos :: [GagTrack] -> Integer -> [(Integer, ([Gag], Cog))]
 findCombos tracks players = foldMap findCombosN [1..players]
   where
-    cogs = do
+    cogs = [newCog] ++ do
       knockback <- gagDamage !! fromEnum Lure
       return $ applyEffect knockback Lured newCog
     pred gag = elem (gagTrack gag) tracks
