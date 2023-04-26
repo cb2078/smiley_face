@@ -74,7 +74,8 @@ applyEffect damage effect cog =
 
 applyGagTracks :: [Gag] -> Cog -> Maybe Cog
 applyGagTracks gags cog 
-  | track == Lure && lured cog > 0 = Nothing
+  | (track == Lure && lured cog > 0 ||
+     track == Drop && lured cog > 0) = Nothing
   | otherwise = Just $ maybe id (applyEffect $ foldr1 max $ map damage gags) (gagEffect track)  . applyDamage dmg $ cog
   where
     track = gagTrack $ head gags
