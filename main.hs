@@ -1,4 +1,5 @@
 import Data.List
+import Data.Foldable
 import Control.Monad
 
 data Effect = Dazed | Marked | Soaked | Lured | Winded | Encore
@@ -69,20 +70,21 @@ applyEffect damage effect cog =
 -- how TTCC does decimal calculations
 (-:) f x = ceiling . f . fromIntegral $ x
 
-applyGagTracks :: [Gag] -> Cog -> Cog
-applyGagTracks gags cog =
-  maybe id (applyEffect $ foldr1 max $ map damage gags) (gagEffect track)  . applyDamage dmg $ cog
+applyGagTracks :: [Gag] -> Cog -> Maybe Cog
+applyGagTracks gags cog 
+  | track == Lure && lured cog > 0 = Nothing
+  | otherwise = Just $ maybe id (applyEffect $ foldr1 max $ map damage gags) (gagEffect track)  . applyDamage dmg $ cog
   where
     track = gagTrack $ head gags
     dmg = if track == Lure
              then 0
              else (*gagCombo gags) -: (foldr1 (+) . map ((lured cog+) . damage)) gags 
 
-applyGag :: Gag -> Cog -> Cog
+applyGag :: Gag -> Cog -> Maybe Cog
 applyGag gag = applyGagTracks [gag] 
 
-applyGags :: [Gag] -> Cog -> Cog
-applyGags = flip (foldr applyGagTracks) . groupGags . reverse . sort
+applyGags :: [Gag] -> Cog -> Maybe Cog
+applyGags = flip (foldrM applyGagTracks) . groupGags . reverse . sort
 
 -- testing
 fruitPie = (!!4) $ filter ((Throw==) . gagTrack) gags
@@ -96,7 +98,9 @@ tests = [([seltzer, seltzer], 72),
          ([bowlingBall, bowlingBall], 91)]
 runTests :: [Bool]
 runTests = map (uncurry test) tests
-  where test = (==) . hp . flip applyGags newCog
+  where
+    test :: [Gag] -> Integer -> Bool
+    test gags res = maybe False ((res==) . hp) (applyGags gags newCog)
 
 -- NOTE this may be slow without DP
 combR :: Integer -> [a] -> [[a]]
@@ -104,14 +108,15 @@ combR 0 _ = [[]]
 combR _ [] = []
 combR k xxs@(x:xs) = ((x:) <$> combR (k-1) xxs) ++ combR k xs 
 
-findCombos :: [GagTrack] -> Integer -> [(Integer, [Gag])]
+findCombos :: [GagTrack] -> Integer -> [(Integer, ([Gag], Cog))]
 findCombos tracks players = foldMap findCombosN [1..players]
   where
     cogs = do
       knockback <- gagDamage !! fromEnum Lure
       return $ applyEffect knockback Lured newCog
     pred gag = elem (gagTrack gag) tracks
-    f cog gags = (hp $ applyGags gags cog, gags)
+    -- TODO remove Nothing results instead of making them zero
+    f cog gags = (maybe 0 hp (applyGags gags cog), (gags, cog))
     -- TODO find a better way of doing this
     findCombosN n = foldMap (\ cog -> map (f cog) . combR n $ filter pred gags) cogs
 
@@ -128,4 +133,4 @@ mgrHPs = [240, 320, 465, 600]
 main :: IO ()
 main = do
   guard (all id runTests)
-  mapM_ print $ sort . findCombos [Throw,Squirt,Drop] $ 2
+  mapM_ print $ filter ((`elem` cogHPs) . fst) . filter ((>0) . fst) . sort $ findCombos [Throw,Lure] 2
