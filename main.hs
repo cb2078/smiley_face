@@ -25,8 +25,9 @@ gagDamage = [[12, 24, 30, 45, 60, 84, 90, 135], -- toon up
              [4, 8, 12, 21, 30, 56, 85, 115], -- squirt
              [5, 10, 16, 23, 30, 50, 70, 90], -- sound
              [8, 12, 35, 56, 90, 140, 200, 240]] -- drop
-gags = [Gag (toEnum i :: GagTrack) damage False
-         | i <- [0 .. 7], damage <- gagDamage !! i]
+gags =
+  [Gag (toEnum i :: GagTrack) damage False | i <- [0 .. 7], damage <- gagDamage !! i] ++
+  [Gag Lure ((1.15*) -: damage) True | damage <- gagDamage !! 2 ] -- pres lure
 
 -- needed for combos
 groupGags :: [Gag] -> [[Gag]]
@@ -115,7 +116,7 @@ findCombos :: [GagTrack] -> Integer -> [Combo]
 findCombos tracks players = foldMap findCombosN [1..players]
   where
     cogs = [newCog] ++ do
-      knockback <- gagDamage !! fromEnum Lure
+      knockback <- map damage $ filter ((==Lure) . gagTrack) gags
       return $ applyEffect knockback Lured newCog
     pred gag = elem (gagTrack gag) tracks
     -- TODO remove Nothing results instead of making them zero
