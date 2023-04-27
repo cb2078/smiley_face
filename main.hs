@@ -56,9 +56,6 @@ instance Show Cog where
 newCog :: Cog
 newCog = Cog 0 1 0
 
-canKnockback :: Gag -> Bool
-canKnockback gag = gagTrack gag `elem` [Throw, Squirt]
-
 applyDamage :: Integer -> Cog -> Cog
 applyDamage dmg cog = cog { hp = (marked cog*) -: dmg + hp cog }
 
@@ -74,13 +71,14 @@ applyEffect damage effect cog =
 
 applyGagTracks :: [Gag] -> Cog -> Maybe Cog
 applyGagTracks gags cog 
-  | (track >= Zap && lured cog > 0) = Nothing
+  | ((track >= Zap || track == Lure) && lured cog > 0) = Nothing
   | otherwise = Just $ maybe id (applyEffect $ foldr1 max $ map damage gags) (gagEffect track)  . applyDamage dmg $ cog
   where
     track = gagTrack $ head gags
+    knockback = if track `elem` [Throw, Squirt] then lured cog else 0
     dmg = if track == Lure
              then 0
-             else (*gagCombo gags) -: (foldr1 (+) . map ((lured cog+) . damage)) gags 
+             else (*gagCombo gags) -: (foldr1 (+) . map ((knockback+) . damage)) gags 
 
 applyGag :: Gag -> Cog -> Maybe Cog
 applyGag gag = applyGagTracks [gag] 
