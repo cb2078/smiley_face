@@ -109,7 +109,6 @@ combR _ [] = []
 combR k xxs@(x:xs) = ((x:) <$> combR (k-1) xxs) ++ combR k xs 
 
 type Combo = (Integer, ([Gag], Cog))
-
 findCombos :: [GagTrack] -> Integer -> [Combo]
 findCombos tracks players = foldMap findCombosN [1..players]
   where
@@ -119,8 +118,10 @@ findCombos tracks players = foldMap findCombosN [1..players]
     pred gag = elem (gagTrack gag) tracks
     -- TODO remove Nothing results instead of making them zero
     f cog gags = (maybe 0 hp (applyGags gags cog), (gags, cog))
-    -- TODO find a better way of doing this
-    findCombosN n = foldMap (\ cog -> map (f cog) . combR n $ filter pred gags) cogs
+    findCombosN n = do
+      cog <- cogs
+      gags <- combR n $ filter ((`elem` tracks) . gagTrack) gags
+      return $ f cog gags
 
 cogLevels = [1..20]
 
