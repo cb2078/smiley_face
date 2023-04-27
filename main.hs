@@ -50,9 +50,7 @@ gagCombo gags
     track = gagTrack $ head gags
 
 data Cog = Cog { hp :: Integer, marked :: Float, lured :: Integer }
-         deriving (Eq, Ord)
-instance Show Cog where
-  show cog = if lured cog == 0 then "" else "Lure" ++ show (lured cog)
+         deriving (Show, Eq, Ord)
 newCog :: Cog
 newCog = Cog 0 1 0
 
@@ -137,4 +135,5 @@ main = do
   mapM_ pprint $ filter ((`elem` cogHPs) . fst) . sort $ findCombos [Throw,Lure] 2
   where
     pprint :: Combo -> IO ()
-    pprint (dmg, (gags, cog)) = putStrLn $ show dmg ++ " " ++ show gags ++ " " ++ show cog
+    pprint (dmg, (gags, cog)) = putStrLn $ intercalate " "
+      [show dmg, show gags, if lured cog > 0 then "Lured" ++ show (lured cog) else ""]
