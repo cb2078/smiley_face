@@ -115,13 +115,11 @@ findCombos tracks players = foldMap findCombosN [1..players]
     cogs = [newCog] ++ do
       knockback <- map damage $ filter ((==Lure) . gagTrack) gags
       return $ applyEffect knockback Lured newCog
-    pred gag = elem (gagTrack gag) tracks
-    -- TODO remove Nothing results instead of making them zero
-    f cog gags = (maybe 0 hp (applyGags gags cog), (gags, cog))
     findCombosN n = do
       cog <- cogs
       gags <- combR n $ filter ((`elem` tracks) . gagTrack) gags
-      return $ f cog gags
+      Just damage <- return $ hp <$> applyGags gags cog
+      return $ (damage, (gags, cog))
 
 cogLevels = [1..20]
 
@@ -136,7 +134,7 @@ mgrHPs = [240, 320, 465, 600]
 main :: IO ()
 main = do
   guard (all id runTests)
-  mapM_ pprint $ filter ((`elem` cogHPs) . fst) . filter ((>0) . fst) . sort $ findCombos [Throw,Lure] 2
+  mapM_ pprint $ filter ((`elem` cogHPs) . fst) . sort $ findCombos [Throw,Lure] 2
   where
     pprint :: Combo -> IO ()
     pprint (dmg, (gags, cog)) = putStrLn $ show dmg ++ " " ++ show gags ++ " " ++ show cog
