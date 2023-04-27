@@ -62,7 +62,7 @@ applyEffect damage effect cog =
   case effect of
        Marked -> cog { marked = 1.2, lured = 0 }
        Lured -> cog { lured = damage }
-       _ -> cog
+       _ -> cog { lured = 0 }
 
 -- how TTCC does decimal calculations
 (-:) f x = ceiling . f . fromIntegral $ x
