@@ -117,6 +117,7 @@ findCombos tracks players = foldMap findCombosN [1..players]
       cog <- cogs
       gags <- combR n $ filter ((`elem` tracks) . gagTrack) gags
       Just damage <- return $ hp <$> applyGags gags cog
+      guard $ damage > 0 
       return $ (damage, (gags, cog))
 
 cogLevels = [1..20]
