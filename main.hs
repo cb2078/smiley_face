@@ -31,11 +31,14 @@ gagDamages = [[12, 24, 30, 45, 60, 84, 90, 135], -- toon up
               [12, 20, 36, 60, 90, 140, 180, 240], -- zap
               [5, 10, 16, 23, 30, 50, 70, 90], -- sound
               [8, 12, 35, 56, 90, 140, 200, 240]] -- drop
+
+gags, startingGags :: [Gag]
 gags =
   [Gag (toEnum i :: GagTrack) damage False 1 | i <- [0 .. 7], damage <- gagDamages !! i] ++
   [Gag Lure ((1.15*) -: damage) True 1 | damage <- gagDamages !! 2] ++ -- pres lure
   -- TODO trap for exes
   [Gag Trap ((1.2*) -: damage) True 1 | damage <- gagDamages !! 1] -- pres trap
+startingGags = filter ((`elem` [Trap, Lure]) . gagTrack) gags
 
 -- needed for combos
 groupGags :: [Gag] -> [[Gag]]
@@ -78,7 +81,6 @@ applyEffect damage effect cog =
 -- how TTCC does decimal calculations
 (-:) f x = ceiling . f . fromIntegral $ x
 
--- TODO ignore results where trap doesn't do anything
 applyGagTracks :: [Gag] -> Cog -> Maybe Cog
 applyGagTracks gags cog 
   | any id [(track >= Zap || track == Lure) && lured cog > 0
@@ -121,23 +123,19 @@ combR 0 _ = [[]]
 combR _ [] = []
 combR k xxs@(x:xs) = ((x:) <$> combR (k-1) xxs) ++ combR k xs 
 
-type Combo = (Integer, ([Gag], Cog))
+type Combo = (Integer, ([Gag], Gag))
 findCombos :: [GagTrack] -> Integer -> [Combo]
 findCombos tracks players = foldMap findCombosN [1..players]
   where
-    cogs = [newCog] ++ foldMap f [(Lure, Lured), (Trap, Trapped)]
-      where f (track, effect) = do
-              knockback <- map damage $ filter ((==track) . gagTrack) gags
-              return $ applyEffect knockback effect newCog
     findCombosN n = do
-      cog <- cogs
+      startingGag <- startingGags
       let addEncore e gag = gag { encore = e }
       gags <- combR n $
         filter ((`elem` tracks) . gagTrack) $
         addEncore <$> [1, 1.05, 1.15] <*> gags
-      Just damage <- return $ hp <$> applyGags gags cog
+      Just damage <- return $ fmap hp $ applyGags gags =<< applyGag startingGag newCog
       guard $ damage > 0 
-      return $ (damage, (gags, cog))
+      return $ (damage, (gags, startingGag))
 
 cogLevels = [1..20]
 
@@ -152,11 +150,9 @@ mgrHPs = [240, 320, 465, 600]
 main :: IO ()
 main = do
   guard (all id runTests)
+  putStrLn "damage gags startingGag"
   mapM_ pprint $ filter ((`elem` cogHPs) . fst) . sort $ findCombos [Throw,Lure] 2
   where
     pprint :: Combo -> IO ()
-    pprint (dmg, (gags, cog)) = putStrLn $ intercalate " "
-      [show dmg
-      ,show gags
-      ,if lured cog > 0 then "Lured" ++ show (lured cog) else ""
-      ,if trapped cog > 0 then "Trapped" ++ show (trapped cog) else ""]
+    pprint (dmg, (gags, startingGag)) = putStrLn $ intercalate " "
+      [show dmg, show gags, show startingGag]
