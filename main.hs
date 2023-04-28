@@ -21,7 +21,7 @@ instance Show Gag where
     (show $ baseDamage gag) 
 
 damage :: Gag -> Integer
-damage gag = (encore gag*) -: baseDamage gag
+damage gag = encore gag `mul` baseDamage gag
 
 gagDamages :: [[Integer]]
 gagDamages = [[12, 24, 30, 45, 60, 84, 90, 135], -- toon up
@@ -34,11 +34,17 @@ gagDamages = [[12, 24, 30, 45, 60, 84, 90, 135], -- toon up
               [8, 12, 35, 56, 90, 140, 200, 240]] -- drop
 
 gags, startingGags :: [Gag]
-gags =
-  [Gag (toEnum i :: GagTrack) damage False 1 | i <- [0 .. 7], damage <- gagDamages !! i] ++
-  [Gag Lure ((1.15*) -: damage) True 1 | damage <- gagDamages !! 2] ++ -- pres lure
-  -- TODO trap for exes
-  [Gag Trap ((1.2*) -: damage) True 1 | damage <- gagDamages !! 1] -- pres trap
+gags = do
+  i <- [0..7]
+  let track = toEnum i :: GagTrack
+  damage <- gagDamages !! i
+  encore <- [0.5, 1, 1.05, 1.15]
+  guard $ track == Sound || encore /= 0.5
+  let gag = Gag track damage False encore
+  case track of
+       Trap -> [gag, gag { prestige = True, baseDamage = mul 1.2 damage }]
+       Lure -> [gag, gag { prestige = True, baseDamage = mul 1.15 damage }]
+       _ -> return gag
 startingGags = filter ((`elem` [Trap, Lure]) . gagTrack) gags
 
 -- needed for combos
@@ -67,7 +73,7 @@ newCog :: Cog
 newCog = Cog 0 1 0 0
 
 applyDamage :: Integer -> Cog -> Cog
-applyDamage dmg cog = cog { hp = (marked cog*) -: dmg + hp cog }
+applyDamage dmg cog = cog { hp = marked cog `mul` dmg + hp cog }
 
 applyEffect :: Integer -> Effect -> Cog -> Cog
 applyEffect damage effect cog =
@@ -80,7 +86,8 @@ applyEffect damage effect cog =
        _ -> cog { lured = 0 }
 
 -- how TTCC does decimal calculations
-(-:) f x = ceiling . f . fromIntegral $ x
+mul :: (RealFrac a, Integral b) => a -> b -> b
+mul x = ceiling . (x*) . fromIntegral
 
 applyGagTracks :: [Gag] -> Cog -> Maybe Cog
 applyGagTracks gags cog 
@@ -97,7 +104,7 @@ applyGagTracks gags cog
     dmg = case track of
                Trap -> 0
                Lure -> trapped cog
-               _ -> (*gagCombo gags) -: (foldr1 (+) . map ((knockback+) . damage)) gags 
+               _ -> gagCombo gags `mul` (foldr1 (+) . map ((knockback+) . damage)) gags 
 
 applyGag :: Gag -> Cog -> Maybe Cog
 applyGag gag = applyGagTracks [gag] 
@@ -106,9 +113,9 @@ applyGags :: [Gag] -> Cog -> Maybe Cog
 applyGags = flip (foldrM applyGagTracks) . groupGags . reverse . sort
 
 -- testing
-fruitPie = (!!4) $ filter ((Throw==) . gagTrack) gags
-seltzer = (!!4) $ filter ((Squirt==) . gagTrack) gags
-bowlingBall = (!!2) $ filter ((Drop==) . gagTrack) gags
+fruitPie = Gag Throw 56 False 1
+seltzer = Gag Squirt 30 False 1
+bowlingBall = Gag Drop 35 False 1
 
 type Test = ([Gag], Integer)
 tests :: [Test]
@@ -132,11 +139,8 @@ findCombos :: [GagTrack] -> Integer -> [Combo]
 findCombos tracks players = foldMap findCombosN [1..players]
   where
     findCombosN n = do
-      let addEncore e gag = gag { encore = e }
-      let addWinded gags = gags ++ (map (addEncore 0.5) . filter ((==Sound) . gagTrack)) gags
-      let addEncores gags = addWinded gags ++ (addEncore <$> [1, 1.05, 1.15] <*> gags)
-      startingGag <- addEncores startingGags
-      gags <- combR n $ filter ((`elem` tracks) . gagTrack) $ addEncores  gags
+      startingGag <- startingGags
+      gags <- combR n $ filter ((`elem` tracks) . gagTrack) gags
       Just damage <- return $ fmap hp $ applyGags gags =<< applyGag startingGag newCog
       guard $ damage > 0 
       return $ (damage, (gags, startingGag))
@@ -144,7 +148,7 @@ findCombos tracks players = foldMap findCombosN [1..players]
 cogLevels = [1..20]
 
 addExes :: [Integer] -> [Integer]
-addExes hps = (-:) <$> [id, (1.5*)] <*> hps
+addExes hps = mul <$> [1, 1.5] <*> hps
 
 cogHPs, lbHPs, mgrHPs :: [Integer]
 cogHPs = addExes $ (\ n -> (n + 1) * (n + 2)) <$> cogLevels
