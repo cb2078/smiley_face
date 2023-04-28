@@ -7,29 +7,35 @@ data Effect = Trapped | Marked | Soaked | Lured | Winded | Encore
               deriving (Eq, Ord, Show)
 data GagTrack = ToonUp | Trap | Lure | Throw | Squirt | Zap | Sound | Drop
               deriving (Eq, Ord, Enum, Show)
-data Gag = Gag { gagTrack :: GagTrack,
-                 damage :: Integer,
-                 prestige :: Bool }
+data Gag = Gag { gagTrack :: GagTrack, baseDamage :: Integer, prestige :: Bool, encore :: Float }
          deriving (Eq, Ord)
 instance Show Gag where
   show gag =
+    (case encore gag of
+          1 -> ""
+          1.05 -> "Encore "
+          1.15 -> "PresEncore ") ++
     (if prestige gag then "Pres" else "") ++
     (show $ gagTrack gag) ++
-    (show $ damage gag) 
+    (show $ baseDamage gag) 
 
-gagDamage = [[12, 24, 30, 45, 60, 84, 90, 135], -- toon up
-             [14, 28, 45, 75, 115, 160, 220, 280], -- trap
-             [5, 10, 15, 30, 55, 45, 100, 75], -- lure
-             [8, 13, 20, 35, 56, 90, 130, 170], -- throw
-             [4, 8, 12, 21, 30, 56, 85, 115], -- squirt
-             [12, 20, 36, 60, 90, 140, 180, 240], -- zap
-             [5, 10, 16, 23, 30, 50, 70, 90], -- sound
-             [8, 12, 35, 56, 90, 140, 200, 240]] -- drop
+damage :: Gag -> Integer
+damage gag = (encore gag*) -: baseDamage gag
+
+gagDamages :: [[Integer]]
+gagDamages = [[12, 24, 30, 45, 60, 84, 90, 135], -- toon up
+              [14, 28, 45, 75, 115, 160, 220, 280], -- trap
+              [5, 10, 15, 30, 55, 45, 100, 75], -- lure
+              [8, 13, 20, 35, 56, 90, 130, 170], -- throw
+              [4, 8, 12, 21, 30, 56, 85, 115], -- squirt
+              [12, 20, 36, 60, 90, 140, 180, 240], -- zap
+              [5, 10, 16, 23, 30, 50, 70, 90], -- sound
+              [8, 12, 35, 56, 90, 140, 200, 240]] -- drop
 gags =
-  [Gag (toEnum i :: GagTrack) damage False | i <- [0 .. 7], damage <- gagDamage !! i] ++
-  [Gag Lure ((1.15*) -: damage) True | damage <- gagDamage !! 2] ++ -- pres lure
+  [Gag (toEnum i :: GagTrack) damage False 1 | i <- [0 .. 7], damage <- gagDamages !! i] ++
+  [Gag Lure ((1.15*) -: damage) True 1 | damage <- gagDamages !! 2] ++ -- pres lure
   -- TODO trap for exes
-  [Gag Trap ((1.2*) -: damage) True | damage <- gagDamage !! 1] -- pres trap
+  [Gag Trap ((1.2*) -: damage) True 1 | damage <- gagDamages !! 1] -- pres trap
 
 -- needed for combos
 groupGags :: [Gag] -> [[Gag]]
@@ -72,6 +78,7 @@ applyEffect damage effect cog =
 -- how TTCC does decimal calculations
 (-:) f x = ceiling . f . fromIntegral $ x
 
+-- TODO ignore results where trap doesn't do anything
 applyGagTracks :: [Gag] -> Cog -> Maybe Cog
 applyGagTracks gags cog 
   | ((track >= Zap || track == Lure) && lured cog > 0) = Nothing
@@ -122,7 +129,10 @@ findCombos tracks players = foldMap findCombosN [1..players]
               return $ applyEffect knockback effect newCog
     findCombosN n = do
       cog <- cogs
-      gags <- combR n $ filter ((`elem` tracks) . gagTrack) gags
+      let addEncore e gag = gag { encore = e }
+      gags <- combR n $
+        filter ((`elem` tracks) . gagTrack) $
+        addEncore <$> [1, 1.05, 1.15] <*> gags
       Just damage <- return $ hp <$> applyGags gags cog
       guard $ damage > 0 
       return $ (damage, (gags, cog))
