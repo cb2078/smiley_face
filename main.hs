@@ -25,9 +25,9 @@ instance Show Gag where
           0.5 -> "Winded "
     ,if prestige gag then "Pres" else ""
     ,show track
-    ,if track == Zap && jump gag `elem` ([id, (0.5*)] <*> [0.9, 1.1]) then "Pool" else ""
-    ,if track == Squirt && splash gag /= 1 then "Splash" else ""
-    ,show (baseDamage gag)]
+    ,show (baseDamage gag)
+    ,if jump gag <= 0.55 then " SplitPool" else if jump gag /= 1 then " Pool" else ""
+    ,if splash gag /= 1 then " Splash" else ""]
     where
       track = gagTrack gag
 
