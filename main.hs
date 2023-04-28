@@ -72,7 +72,7 @@ applyEffect damage effect cog =
        Lured -> if trapped cog > 0
                    then cog { trapped = 0 }
                    else cog { lured = damage }
-       Trapped -> cog { trapped = damage }
+       Trapped -> cog { trapped = damage, lured = 0 }
        _ -> cog { lured = 0 }
 
 -- how TTCC does decimal calculations
