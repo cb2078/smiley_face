@@ -7,8 +7,14 @@ data Effect = Trapped | Marked | Soaked | Lured | Winded | Encore
               deriving (Eq, Ord, Show)
 data GagTrack = ToonUp | Trap | Lure | Throw | Squirt | Zap | Sound | Drop
               deriving (Eq, Ord, Enum, Show)
-data Gag = Gag { gagTrack :: GagTrack, baseDamage :: Integer, prestige :: Bool, encore :: Float }
-         deriving (Eq, Ord)
+data Gag = Gag {
+  gagTrack :: GagTrack,
+  baseDamage :: Integer,
+  prestige :: Bool,
+  encore :: Float,
+  splash :: Float,
+  jump :: Float
+} deriving (Eq, Ord)
 instance Show Gag where
   show gag =
     (case encore gag of
@@ -17,11 +23,17 @@ instance Show Gag where
           1.15 -> "PresEncore "
           0.5 -> "Winded ") ++
     (if prestige gag then "Pres" else "") ++
-    (show $ gagTrack gag) ++
-    (show $ baseDamage gag) 
+    show track ++
+    (if track == Squirt && splash gag /= 1 then "Splash" else "") ++
+    show (baseDamage gag) 
+    where
+      track = gagTrack gag
+
+newGag :: GagTrack -> Integer -> Float -> Gag
+newGag track damage encore = Gag track damage False encore 1 1
 
 damage :: Gag -> Integer
-damage gag = encore gag `mul` baseDamage gag
+damage gag = (splash gag `mul`) . (encore gag `mul`) $ baseDamage gag
 
 gagDamages :: [[Integer]]
 gagDamages = [[12, 24, 30, 45, 60, 84, 90, 135], -- toon up
@@ -38,14 +50,16 @@ gags = do
   i <- [0..7]
   let track = toEnum i :: GagTrack
   damage <- gagDamages !! i
-  encore <- [0.5, 1, 1.05, 1.15]
-  guard $ track == Sound || encore /= 0.5
-  let gag = Gag track damage False encore
-  case track of
-       Trap -> [gag, gag { prestige = True, baseDamage = mul 1.2 damage }]
+  encore <- [1] -- [1, 1.05, 1.15]
+  let gag = newGag track damage encore
+  -- Track specific stuff
+  gag : case track of
+       Trap -> [gag { prestige = True, baseDamage = mul 1.2 damage }]
        Lure -> [gag, gag { prestige = True, baseDamage = mul 1.15 damage }]
-       _ -> return gag
-startingGags = filter ((`elem` [Trap, Lure]) . gagTrack) gags
+       Squirt -> [gag { splash = 0.25 }, gag { prestige = True, splash = 0.5 }] -- squirt splash
+       Sound -> [ gag { encore = 0.5 } ] -- winded
+       _ -> []
+startingGags = filter ((`elem` [Lure]) . gagTrack) gags
 
 -- needed for combos
 groupGags :: [Gag] -> [[Gag]]
@@ -113,9 +127,9 @@ applyGags :: [Gag] -> Cog -> Maybe Cog
 applyGags = flip (foldrM applyGagTracks) . groupGags . reverse . sort
 
 -- testing
-fruitPie = Gag Throw 56 False 1
-seltzer = Gag Squirt 30 False 1
-bowlingBall = Gag Drop 35 False 1
+fruitPie = newGag Throw 56 1
+seltzer = newGag Squirt 30 1
+bowlingBall = newGag Drop 35 1
 
 type Test = ([Gag], Integer)
 tests :: [Test]
