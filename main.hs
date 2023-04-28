@@ -2,6 +2,7 @@ import Data.List
 import Data.Foldable
 import Control.Monad
 import Data.Char
+import Data.Function
 
 data Effect = Trapped | Marked | Soaked | Lured | Winded | Encore
               deriving (Eq, Ord, Show)
@@ -69,7 +70,10 @@ startingGags = filter ((`elem` [Lure]) . gagTrack) gags
 
 -- needed for combos
 groupGags :: [Gag] -> [[Gag]]
-groupGags = groupBy $ \ x y -> gagTrack x == gagTrack y
+-- (hack) do squirt splash separately
+groupGags = groupBy $ \ x y ->
+  on (==) gagTrack x y &&
+  on (==) ((==1) . splash) x y
 
 -- these are the only effects that can't exist at the start of a round
 gagEffect :: GagTrack -> Maybe Effect
@@ -101,18 +105,6 @@ newCog = Cog 0 1 0 0 False
 applyDamage :: Integer -> Cog -> Cog
 applyDamage dmg cog = cog { hp = marked cog `mul` dmg + hp cog }
 
-applyEffect :: Integer -> Effect -> Cog -> Cog
-applyEffect damage effect cog =
-  case effect of
-       Marked -> cog { marked = 1.2, lured = 0 }
-       Lured -> if trapped cog > 0
-                   then cog { trapped = 0 }
-                   else cog { lured = damage }
-       Trapped -> cog { trapped = damage, lured = 0 }
-       -- TODO squirt splash does not unlure
-       Soaked -> cog { soaked = True, lured = 0 }
-       _ -> cog { lured = 0 }
-
 -- how TTCC does decimal calculations
 mul :: (RealFrac a, Integral b) => a -> b -> b
 mul x = ceiling . (x*) . fromIntegral
@@ -120,20 +112,36 @@ mul x = ceiling . (x*) . fromIntegral
 applyGagTracks :: [Gag] -> Cog -> Maybe Cog
 applyGagTracks gags cog 
   | any id [
-      (track >= Zap || track == Lure) && lured cog > 0, -- luring does nothing
+      (track >= Zap || track == Lure || squirtSplash) && lured cog > 0, -- luring does nothing
       track > Lure && trapped cog > 0, -- trap does nothing
       track == Trap && (length gags > 1 || trapped cog > 0), -- using trap twice
       track == Lure && (length gags > 1 || lured cog > 0), -- using lure twice
       track == Zap && not (soaked cog) -- dry zap
   ] = Nothing
-  | otherwise = Just $ maybe id (applyEffect $ foldr1 max $ map damage gags) (gagEffect track)  . applyDamage dmg $ cog
+  | otherwise = Just $ maybe id applyEffect (gagEffect track) . applyDamage dmg $ cog
   where
     track = gagTrack $ head gags
-    knockback = if track `elem` [Throw, Squirt] then lured cog else 0
+    squirtSplash = track == Squirt && all ((/=1) . splash) gags
+    knockback = if track `elem` [Throw, Squirt] && not squirtSplash then lured cog else 0
     dmg = case track of
                Trap -> 0
                Lure -> trapped cog
                _ -> gagCombo gags `mul` (foldr1 (+) . map ((knockback+) . damage)) gags 
+    applyEffect :: Effect -> Cog -> Cog
+    applyEffect effect cog =
+      case effect of
+           Marked -> cog { marked = 1.2, lured = 0 }
+           Lured -> if trapped cog > 0
+                       then cog { trapped = 0 }
+                       else cog { lured = maxDmg }
+           Trapped -> cog { trapped = maxDmg, lured = 0 }
+           -- TODO squirt splash does not unlure
+           Soaked -> cog {
+             soaked = True,
+             lured = if squirtSplash then lured cog else 0
+           }
+           _ -> cog { lured = 0 }
+      where maxDmg = foldr1 max $ map damage gags
 
 applyGag :: Gag -> Cog -> Maybe Cog
 applyGag gag = applyGagTracks [gag] 
