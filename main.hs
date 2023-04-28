@@ -175,15 +175,18 @@ combR 0 _ = [[]]
 combR _ [] = []
 combR k xxs@(x:xs) = ((x:) <$> combR (k-1) xxs) ++ combR k xs 
 
-type Combo = (Integer, ([Gag], Gag))
+type Combo = (Integer, ([Gag], Maybe Gag))
 findCombos :: [GagTrack] -> Integer -> [Combo]
 findCombos tracks players = foldMap findCombosN [1..players]
   where
     findCombosN n = do
-      -- TODO don't always have to start with starting gag
-      startingGag <- startingGags
+      startingGag <- Nothing : (Just <$> startingGags)
       gags <- combR n $ filter ((`elem` tracks) . gagTrack) gags
-      Just damage <- return $ fmap hp $ applyGags gags =<< applyGag startingGag newCog
+      Just damage <- return $ fmap hp $ applyGags gags =<<
+        (case startingGag of 
+             Nothing -> Just
+             Just gag -> applyGag gag)
+        newCog
       guard $ damage > 0 
       return $ (damage, (gags, startingGag))
 
@@ -205,4 +208,4 @@ main = do
   where
     pprint :: Combo -> IO ()
     pprint (dmg, (gags, startingGag)) = putStrLn $ intercalate " "
-      [show dmg, show gags, show startingGag]
+      [show dmg, show gags] ++ " " ++ maybe [] show startingGag
