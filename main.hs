@@ -81,7 +81,8 @@ applyEffect damage effect cog =
 -- TODO ignore results where trap doesn't do anything
 applyGagTracks :: [Gag] -> Cog -> Maybe Cog
 applyGagTracks gags cog 
-  | ((track >= Zap || track == Lure) && lured cog > 0) = Nothing
+  | ((track >= Zap || track == Lure) && lured cog > 0 ||
+     track > Lure && trapped cog > 0) = Nothing
   | otherwise = Just $ maybe id (applyEffect $ foldr1 max $ map damage gags) (gagEffect track)  . applyDamage dmg $ cog
   where
     track = gagTrack $ head gags
