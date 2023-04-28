@@ -3,7 +3,7 @@ import Data.Foldable
 import Control.Monad
 import Data.Char
 
-data Effect = Dazed | Marked | Soaked | Lured | Winded | Encore
+data Effect = Trapped | Marked | Soaked | Lured | Winded | Encore
               deriving (Eq, Ord, Show)
 data GagTrack = ToonUp | Trap | Lure | Throw | Squirt | Zap | Sound | Drop
               deriving (Eq, Ord, Enum, Show)
@@ -27,7 +27,9 @@ gagDamage = [[12, 24, 30, 45, 60, 84, 90, 135], -- toon up
              [8, 12, 35, 56, 90, 140, 200, 240]] -- drop
 gags =
   [Gag (toEnum i :: GagTrack) damage False | i <- [0 .. 7], damage <- gagDamage !! i] ++
-  [Gag Lure ((1.15*) -: damage) True | damage <- gagDamage !! 2 ] -- pres lure
+  [Gag Lure ((1.15*) -: damage) True | damage <- gagDamage !! 2] ++ -- pres lure
+  -- TODO trap for exes
+  [Gag Trap ((1.2*) -: damage) True | damage <- gagDamage !! 1] -- pres trap
 
 -- needed for combos
 groupGags :: [Gag] -> [[Gag]]
@@ -35,7 +37,7 @@ groupGags = groupBy $ \ x y -> gagTrack x == gagTrack y
 
 -- these are the only effects that can't exist at the start of a round
 gagEffect :: GagTrack -> Maybe Effect
-gagEffect Trap = Just Dazed
+gagEffect Trap = Just Trapped
 gagEffect Throw = Just Marked
 gagEffect Lure = Just Lured
 gagEffect _ = Nothing
@@ -49,10 +51,10 @@ gagCombo gags
   where
     track = gagTrack $ head gags
 
-data Cog = Cog { hp :: Integer, marked :: Float, lured :: Integer }
+data Cog = Cog { hp :: Integer, marked :: Float, lured :: Integer, trapped :: Integer }
          deriving (Show, Eq, Ord)
 newCog :: Cog
-newCog = Cog 0 1 0
+newCog = Cog 0 1 0 0
 
 applyDamage :: Integer -> Cog -> Cog
 applyDamage dmg cog = cog { hp = (marked cog*) -: dmg + hp cog }
@@ -61,7 +63,10 @@ applyEffect :: Integer -> Effect -> Cog -> Cog
 applyEffect damage effect cog =
   case effect of
        Marked -> cog { marked = 1.2, lured = 0 }
-       Lured -> cog { lured = damage }
+       Lured -> if trapped cog > 0
+                   then cog { trapped = 0 }
+                   else cog { lured = damage }
+       Trapped -> cog { trapped = damage }
        _ -> cog { lured = 0 }
 
 -- how TTCC does decimal calculations
@@ -74,9 +79,10 @@ applyGagTracks gags cog
   where
     track = gagTrack $ head gags
     knockback = if track `elem` [Throw, Squirt] then lured cog else 0
-    dmg = if track == Lure
-             then 0
-             else (*gagCombo gags) -: (foldr1 (+) . map ((knockback+) . damage)) gags 
+    dmg = case track of
+               Trap -> 0
+               Lure -> trapped cog
+               _ -> (*gagCombo gags) -: (foldr1 (+) . map ((knockback+) . damage)) gags 
 
 applyGag :: Gag -> Cog -> Maybe Cog
 applyGag gag = applyGagTracks [gag] 
@@ -110,9 +116,10 @@ type Combo = (Integer, ([Gag], Cog))
 findCombos :: [GagTrack] -> Integer -> [Combo]
 findCombos tracks players = foldMap findCombosN [1..players]
   where
-    cogs = [newCog] ++ do
-      knockback <- map damage $ filter ((==Lure) . gagTrack) gags
-      return $ applyEffect knockback Lured newCog
+    cogs = [newCog] ++ foldMap f [(Lure, Lured), (Trap, Trapped)]
+      where f (track, effect) = do
+              knockback <- map damage $ filter ((==track) . gagTrack) gags
+              return $ applyEffect knockback effect newCog
     findCombosN n = do
       cog <- cogs
       gags <- combR n $ filter ((`elem` tracks) . gagTrack) gags
@@ -137,4 +144,7 @@ main = do
   where
     pprint :: Combo -> IO ()
     pprint (dmg, (gags, cog)) = putStrLn $ intercalate " "
-      [show dmg, show gags, if lured cog > 0 then "Lured" ++ show (lured cog) else ""]
+      [show dmg
+      ,show gags
+      ,if lured cog > 0 then "Lured" ++ show (lured cog) else ""
+      ,if trapped cog > 0 then "Trapped" ++ show (trapped cog) else ""]
