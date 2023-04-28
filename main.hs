@@ -131,11 +131,9 @@ findCombos :: [GagTrack] -> Integer -> [Combo]
 findCombos tracks players = foldMap findCombosN [1..players]
   where
     findCombosN n = do
-      startingGag <- startingGags
-      let addEncore e gag = gag { encore = e }
-      gags <- combR n $
-        filter ((`elem` tracks) . gagTrack) $
-        addEncore <$> [1, 1.05, 1.15] <*> gags
+      let addEncores gags = (\ e gag -> gag { encore = e }) <$> [1, 1.05, 1.15] <*> gags
+      startingGag <- addEncores startingGags
+      gags <- combR n $ filter ((`elem` tracks) . gagTrack) $ addEncores  gags
       Just damage <- return $ fmap hp $ applyGags gags =<< applyGag startingGag newCog
       guard $ damage > 0 
       return $ (damage, (gags, startingGag))
