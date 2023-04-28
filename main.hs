@@ -50,14 +50,18 @@ gagDamages = [[12, 24, 30, 45, 60, 84, 90, 135], -- toon up
 gags, startingGags :: [Gag]
 gags = do
   i <- [0..7]
+  j <- [0..7]
   let track = toEnum i :: GagTrack
-  damage <- gagDamages !! i
-  encore <- [1] -- [1, 1.05, 1.15]
+  let damage = gagDamages !! i !! j
+  encore <- [1, 1.05, 1.15]
   let gag = newGag track damage encore
   -- Track specific stuff
   gag : case track of
              Trap -> [gag { prestige = True, baseDamage = mul 1.2 damage }]
-             Lure -> [gag { prestige = True, baseDamage = mul 1.15 damage }]
+             Lure -> [gag {
+               prestige = True,
+               baseDamage = mul (if mod j 2 == 0 then 1.15 else 1.25) damage
+             }]
              Squirt -> [gag { splash = 0.25 }, gag { prestige = True, splash = 0.5 }] -- squirt splash
              Sound -> [gag { encore = 0.5 }] -- winded
              Zap -> do
