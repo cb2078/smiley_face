@@ -16,16 +16,17 @@ data Gag = Gag {
   jump :: Float
 } deriving (Eq, Ord)
 instance Show Gag where
-  show gag =
-    (case encore gag of
+  show gag = foldr1 (++)
+    [case encore gag of
           1 -> ""
           1.05 -> "Encore "
           1.15 -> "PresEncore "
-          0.5 -> "Winded ") ++
-    (if prestige gag then "Pres" else "") ++
-    show track ++
-    (if track == Squirt && splash gag /= 1 then "Splash" else "") ++
-    show (baseDamage gag) 
+          0.5 -> "Winded "
+    ,if prestige gag then "Pres" else ""
+    ,show track
+    ,if track == Zap && jump gag `elem` ([id, (0.5*)] <*> [0.9, 1.1]) then "Pool" else ""
+    ,if track == Squirt && splash gag /= 1 then "Splash" else ""
+    ,show (baseDamage gag)]
     where
       track = gagTrack gag
 
@@ -33,7 +34,7 @@ newGag :: GagTrack -> Integer -> Float -> Gag
 newGag track damage encore = Gag track damage False encore 1 1
 
 damage :: Gag -> Integer
-damage gag = (splash gag `mul`) . (encore gag `mul`) $ baseDamage gag
+damage gag = (jump gag `mul`) . (splash gag `mul`) . (encore gag `mul`) $ baseDamage gag
 
 gagDamages :: [[Integer]]
 gagDamages = [[12, 24, 30, 45, 60, 84, 90, 135], -- toon up
@@ -57,7 +58,12 @@ gags = do
        Trap -> [gag { prestige = True, baseDamage = mul 1.2 damage }]
        Lure -> [gag, gag { prestige = True, baseDamage = mul 1.15 damage }]
        Squirt -> [gag { splash = 0.25 }, gag { prestige = True, splash = 0.5 }] -- squirt splash
-       Sound -> [ gag { encore = 0.5 } ] -- winded
+       Sound -> [gag { encore = 0.5 }] -- winded
+       Zap -> do
+         pres <- [True, False]
+         split <- [0.5, 1]
+         let pool = if pres then 1.1 else 0.9
+         return gag { prestige = pres, jump = pool * split }
        _ -> []
 startingGags = filter ((`elem` [Lure]) . gagTrack) gags
 
@@ -70,6 +76,7 @@ gagEffect :: GagTrack -> Maybe Effect
 gagEffect Trap = Just Trapped
 gagEffect Throw = Just Marked
 gagEffect Lure = Just Lured
+gagEffect Squirt = Just Soaked
 gagEffect _ = Nothing
 
 gagCombo :: Fractional a => [Gag] -> a
@@ -81,10 +88,15 @@ gagCombo gags
   where
     track = gagTrack $ head gags
 
-data Cog = Cog { hp :: Integer, marked :: Float, lured :: Integer, trapped :: Integer }
-         deriving (Show, Eq, Ord)
+data Cog = Cog {
+  hp :: Integer,
+  marked :: Float,
+  lured :: Integer,
+  trapped :: Integer,
+  soaked :: Bool
+} deriving (Show, Eq, Ord)
 newCog :: Cog
-newCog = Cog 0 1 0 0
+newCog = Cog 0 1 0 0 False
 
 applyDamage :: Integer -> Cog -> Cog
 applyDamage dmg cog = cog { hp = marked cog `mul` dmg + hp cog }
@@ -97,6 +109,8 @@ applyEffect damage effect cog =
                    then cog { trapped = 0 }
                    else cog { lured = damage }
        Trapped -> cog { trapped = damage, lured = 0 }
+       -- TODO squirt splash does not unlure
+       Soaked -> cog { soaked = True, lured = 0 }
        _ -> cog { lured = 0 }
 
 -- how TTCC does decimal calculations
@@ -109,7 +123,8 @@ applyGagTracks gags cog
       (track >= Zap || track == Lure) && lured cog > 0, -- luring does nothing
       track > Lure && trapped cog > 0, -- trap does nothing
       track == Trap && (length gags > 1 || trapped cog > 0), -- using trap twice
-      track == Lure && (length gags > 1 || lured cog > 0) -- using lure twice
+      track == Lure && (length gags > 1 || lured cog > 0), -- using lure twice
+      track == Zap && not (soaked cog) -- dry zap
   ] = Nothing
   | otherwise = Just $ maybe id (applyEffect $ foldr1 max $ map damage gags) (gagEffect track)  . applyDamage dmg $ cog
   where
@@ -153,6 +168,7 @@ findCombos :: [GagTrack] -> Integer -> [Combo]
 findCombos tracks players = foldMap findCombosN [1..players]
   where
     findCombosN n = do
+      -- TODO don't always have to start with starting gag
       startingGag <- startingGags
       gags <- combR n $ filter ((`elem` tracks) . gagTrack) gags
       Just damage <- return $ fmap hp $ applyGags gags =<< applyGag startingGag newCog
@@ -173,7 +189,7 @@ main :: IO ()
 main = do
   guard (all id runTests)
   putStrLn "damage gags startingGag"
-  mapM_ pprint $ filter ((`elem` cogHPs) . fst) . sort $ findCombos [Throw,Lure] 2
+  mapM_ pprint $ filter ((`elem` cogHPs) . fst) . sort $ findCombos [Zap,Squirt] 2
   where
     pprint :: Combo -> IO ()
     pprint (dmg, (gags, startingGag)) = putStrLn $ intercalate " "
