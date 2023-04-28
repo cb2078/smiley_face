@@ -55,16 +55,16 @@ gags = do
   let gag = newGag track damage encore
   -- Track specific stuff
   gag : case track of
-       Trap -> [gag { prestige = True, baseDamage = mul 1.2 damage }]
-       Lure -> [gag, gag { prestige = True, baseDamage = mul 1.15 damage }]
-       Squirt -> [gag { splash = 0.25 }, gag { prestige = True, splash = 0.5 }] -- squirt splash
-       Sound -> [gag { encore = 0.5 }] -- winded
-       Zap -> do
-         pres <- [True, False]
-         split <- [0.5, 1]
-         let pool = if pres then 1.1 else 0.9
-         return gag { prestige = pres, jump = pool * split }
-       _ -> []
+             Trap -> [gag { prestige = True, baseDamage = mul 1.2 damage }]
+             Lure -> [gag { prestige = True, baseDamage = mul 1.15 damage }]
+             Squirt -> [gag { splash = 0.25 }, gag { prestige = True, splash = 0.5 }] -- squirt splash
+             Sound -> [gag { encore = 0.5 }] -- winded
+             Zap -> do
+               pres <- [True, False]
+               split <- [0.5, 1]
+               let pool = if pres then 1.1 else 0.9
+               return gag { prestige = pres, jump = pool * split }
+             _ -> []
 startingGags = filter ((`elem` [Lure]) . gagTrack) gags
 
 -- needed for combos
