@@ -14,7 +14,8 @@ instance Show Gag where
     (case encore gag of
           1 -> ""
           1.05 -> "Encore "
-          1.15 -> "PresEncore ") ++
+          1.15 -> "PresEncore "
+          0.5 -> "Winded ") ++
     (if prestige gag then "Pres" else "") ++
     (show $ gagTrack gag) ++
     (show $ baseDamage gag) 
@@ -131,7 +132,9 @@ findCombos :: [GagTrack] -> Integer -> [Combo]
 findCombos tracks players = foldMap findCombosN [1..players]
   where
     findCombosN n = do
-      let addEncores gags = (\ e gag -> gag { encore = e }) <$> [1, 1.05, 1.15] <*> gags
+      let addEncore e gag = gag { encore = e }
+      let addWinded gags = gags ++ (map (addEncore 0.5) . filter ((==Sound) . gagTrack)) gags
+      let addEncores gags = addWinded gags ++ (addEncore <$> [1, 1.05, 1.15] <*> gags)
       startingGag <- addEncores startingGags
       gags <- combR n $ filter ((`elem` tracks) . gagTrack) $ addEncores  gags
       Just damage <- return $ fmap hp $ applyGags gags =<< applyGag startingGag newCog
