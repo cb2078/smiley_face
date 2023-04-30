@@ -30,6 +30,10 @@ instance Show Gag where
     ,if splash gag /= 1 then " Splash" else ""]
     where
       track = gagTrack gag
+allGagTracks = enumFrom $ toEnum 0
+
+data Config = Config { hasEncore :: Bool, allowedGags :: [GagTrack], startingGags :: [GagTrack], players :: Integer }
+defaultConfig = Config False allGagTracks [Lure] 2
 
 zapPool = 0.9
 presZapPool = 1.1
@@ -58,7 +62,7 @@ gagDamages = [[12, 24, 30, 45, 60, 84, 90, 135], -- toon up
               [5, 10, 16, 23, 30, 50, 70, 90], -- sound
               [8, 12, 35, 56, 90, 140, 200, 240]] -- drop
 
-gags, startingGags :: [Gag]
+gags :: [Gag]
 gags = do
   i <- [0..7]
   j <- [0..7]
@@ -81,7 +85,6 @@ gags = do
                let pool = if pres then presZapPool else zapPool
                return gag { prestige = pres, jump = pool * split }
              _ -> []
-startingGags = filter ((`elem` [Lure]) . gagTrack) gags
 
 -- needed for combos
 groupGags :: [Gag] -> [[Gag]]
@@ -192,12 +195,13 @@ instance Show Combo where
   show (Combo dmg gags startingGag) = intercalate " " $
     [show dmg, show gags, maybe "" show startingGag]
 
-findCombos :: [GagTrack] -> Integer -> [Combo]
-findCombos tracks players = foldMap findCombosN [1..players]
+findCombos :: Config -> [Combo]
+findCombos (Config hasEncore gagTracks startingGagTracks players) =
+  foldMap findCombosN [1..players]
   where
     findCombosN n = do
-      startingGag <- Nothing : (Just <$> startingGags)
-      gags <- combR n $ filter ((`elem` tracks) . gagTrack) gags
+      startingGag <- Nothing : (Just <$> gagFilter startingGagTracks gags)
+      gags <- combR n $ gagFilter gagTracks gags
       Just damage <- return $ fmap hp $ applyGags gags =<<
         (case startingGag of 
              Nothing -> Just
@@ -205,6 +209,10 @@ findCombos tracks players = foldMap findCombosN [1..players]
         newCog
       guard $ damage > 0 
       return $ Combo damage gags startingGag
+      where
+        gagFilter :: [GagTrack] -> [Gag] -> [Gag]
+        gagFilter tracks = filter $ \ Gag { encore = encore, gagTrack = track } ->
+          (hasEncore || encore <= 1) && elem track tracks
 
 cogLevels = [1..20]
 
@@ -220,4 +228,4 @@ main :: IO ()
 main = do
   guard (all id runTests)
   putStrLn "damage gags startingGag"
-  mapM_ print $ filter ((`elem` cogHPs) . comboDamage) . sort $ findCombos [Zap,Squirt] 2
+  mapM_ print $ filter ((`elem` cogHPs) . comboDamage) . sort $ findCombos defaultConfig
