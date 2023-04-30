@@ -18,11 +18,8 @@ data Gag = Gag {
 } deriving (Eq, Ord)
 instance Show Gag where
   show gag = foldr1 (++)
-    [case encore gag of
-          1 -> ""
-          soundEncore -> "Encore "
-          presSoundEncore -> "PresEncore "
-          soundWinded -> "Winded "
+    [maybe undefined snd $ find ((encore gag ==) . fst)
+      [(1, ""), (soundEncore, "Encore "), (presSoundEncore, "PresEncore "), (soundWinded, "Winded ")]
     ,if prestige gag then "Pres" else ""
     ,show track
     ,show (baseDamage gag)
