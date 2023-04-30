@@ -186,7 +186,12 @@ combR 0 _ = [[]]
 combR _ [] = []
 combR k xxs@(x:xs) = ((x:) <$> combR (k-1) xxs) ++ combR k xs 
 
-type Combo = (Integer, ([Gag], Maybe Gag))
+data Combo = Combo { comboDamage :: Integer, comboGags :: [Gag], startingGag :: Maybe Gag }
+           deriving (Eq, Ord)
+instance Show Combo where
+  show (Combo dmg gags startingGag) = intercalate " " $
+    [show dmg, show gags, maybe "" show startingGag]
+
 findCombos :: [GagTrack] -> Integer -> [Combo]
 findCombos tracks players = foldMap findCombosN [1..players]
   where
@@ -199,7 +204,7 @@ findCombos tracks players = foldMap findCombosN [1..players]
              Just gag -> applyGag gag)
         newCog
       guard $ damage > 0 
-      return $ (damage, (gags, startingGag))
+      return $ Combo damage gags startingGag
 
 cogLevels = [1..20]
 
@@ -215,8 +220,4 @@ main :: IO ()
 main = do
   guard (all id runTests)
   putStrLn "damage gags startingGag"
-  mapM_ pprint $ filter ((`elem` cogHPs) . fst) . sort $ findCombos [Zap,Squirt] 2
-  where
-    pprint :: Combo -> IO ()
-    pprint (dmg, (gags, startingGag)) = putStrLn $ intercalate " "
-      [show dmg, show gags] ++ " " ++ maybe [] show startingGag
+  mapM_ print $ filter ((`elem` cogHPs) . comboDamage) . sort $ findCombos [Zap,Squirt] 2
