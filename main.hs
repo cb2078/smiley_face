@@ -232,9 +232,13 @@ cogHPs = addExes $ (\ n -> (n + 1) * (n + 2)) <$> cogLevels
 lbHPs = addExes $ [(\ n -> (n * (n + 1) + 1)), (\ n -> (n + 2) * (n + 3) - 2)] <*> cogLevels
 mgrHPs = [240, 320, 465, 600]
 
+[combos, healCombos] = [findCombos, findHealCombos] <*> pure defaultConfig
+
+search :: [Integer] -> [Combo] -> IO ()
+search hps combos = mapM_ print $
+  sort $ foldMap (\ hp -> filter ((==hp) . comboDamage) combos) hps
+
 main :: IO ()
 main = do
   guard (all id runTests)
-  putStrLn "damage gags startingGag"
-  mapM_ print $ filter ((`elem` cogHPs) . comboDamage) . sort $ findCombos defaultConfig
-  mapM_ print $ sort $ findHealCombos defaultConfig
+  putStrLn "Done"
