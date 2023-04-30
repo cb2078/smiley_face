@@ -208,7 +208,10 @@ instance Show Combo where
     [show dmg, show gags, maybe "" show startingGag]
 instance Ord Combo where
   c0 `compare` c1 = on compare f c0 c1
-    where f = liftM2 div sum length . map (abs . (subtract 4) . index) . comboGags
+    where
+      f Combo { comboGags = comboGags, startingGag = startingGag } =
+        liftM2 div sum length $ map (abs . (subtract 4) . index) $
+        comboGags ++ maybe [] (:[]) startingGag
 
 findCombos, findHealCombos :: Config -> [Combo]
 findCombos (Config hasEncore gagTracks startingGagTracks players) =
