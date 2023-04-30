@@ -50,7 +50,7 @@ squirtSplash = 0.25
 presSquirtSplash = 0.5
 
 newGag :: GagTrack -> Integer -> Float -> Gag
-newGag track damage encore = Gag track damage False encore 1 1 1 Nothing
+newGag track damage encore = Gag track damage False encore 1 1 0 Nothing
 
 damage :: Gag -> Integer
 damage gag = (jump gag `mul`) . (splash gag `mul`) . (encore gag `mul`) $ baseDamage gag
@@ -94,7 +94,8 @@ gags = genGags (enumFrom Trap) $ \ gag@Gag{ baseDamage = damage } j -> gag :
        _ -> []
 healGags = genGags [ToonUp, Throw] $ \ gag _ ->
   case gagTrack gag of 
-       ToonUp -> gag : [gag { prestige = pres, selfHeal = if pres then 0.4 else 0.25 } | pres <- [False, True]] 
+       ToonUp -> gag { selfHeal = 1 } :
+         [gag { prestige = pres, selfHeal = if pres then 0.4 else 0.25 } | pres <- [False, True]] 
        Throw -> return gag { prestige = True, selfHeal = 0.2 }
 
 -- needed for combos
