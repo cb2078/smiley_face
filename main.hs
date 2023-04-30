@@ -20,16 +20,27 @@ instance Show Gag where
   show gag = foldr1 (++)
     [case encore gag of
           1 -> ""
-          1.05 -> "Encore "
-          1.15 -> "PresEncore "
-          0.5 -> "Winded "
+          soundEncore -> "Encore "
+          presSoundEncore -> "PresEncore "
+          soundWinded -> "Winded "
     ,if prestige gag then "Pres" else ""
     ,show track
     ,show (baseDamage gag)
-    ,if jump gag <= 0.55 then " SplitPool" else if jump gag /= 1 then " Pool" else ""
+    ,if jump gag <= (presZapPool / 2) then " SplitPool" else if jump gag /= 1 then " Pool" else ""
     ,if splash gag /= 1 then " Splash" else ""]
     where
       track = gagTrack gag
+
+zapPool = 0.9
+presZapPool = 1.1
+soundWinded = 0.5
+soundEncore = 1.05
+presSoundEncore = 1.15
+presSingleLure = 1.15
+presGroupLure = 1.25
+presTrap = 1.2
+squirtSplash = 0.25
+presSquirtSplash = 0.5
 
 newGag :: GagTrack -> Integer -> Float -> Gag
 newGag track damage encore = Gag track damage False encore 1 1
@@ -53,21 +64,21 @@ gags = do
   j <- [0..7]
   let track = toEnum i :: GagTrack
   let damage = gagDamages !! i !! j
-  encore <- [1, 1.05, 1.15]
+  encore <- [1, soundEncore, presSoundEncore]
   let gag = newGag track damage encore
   -- Track specific stuff
   gag : case track of
              Trap -> [gag { prestige = True, baseDamage = mul 1.2 damage }]
              Lure -> [gag {
                prestige = True,
-               baseDamage = mul (if mod j 2 == 0 then 1.15 else 1.25) damage
+               baseDamage = mul (if mod j 2 == 0 then presSingleLure else presGroupLure) damage
              }]
-             Squirt -> [gag { splash = 0.25 }, gag { prestige = True, splash = 0.5 }] -- squirt splash
-             Sound -> [gag { encore = 0.5 }] -- winded
+             Squirt -> [gag { splash = squirtSplash }, gag { prestige = True, splash = presSquirtSplash }] -- squirt splash
+             Sound -> [gag { encore = soundWinded }] -- winded
              Zap -> do
                pres <- [True, False]
                split <- [0.5, 1]
-               let pool = if pres then 1.1 else 0.9
+               let pool = if pres then presZapPool else zapPool
                return gag { prestige = pres, jump = pool * split }
              _ -> []
 startingGags = filter ((`elem` [Lure]) . gagTrack) gags
