@@ -27,10 +27,10 @@ instance Show Gag where
     ,if splash gag /= 1 then " Splash" else ""]
     where
       track = gagTrack gag
-allGagTracks = enumFrom $ toEnum 0
+allGagTracks = enumFrom (toEnum 1 :: GagTrack)
 
 data Config = Config { hasEncore :: Bool, allowedGags :: [GagTrack], startingGags :: [GagTrack], players :: Integer }
-defaultConfig = Config False allGagTracks [Lure] 2
+defaultConfig = Config False (enumFrom Trap) [Lure] 2
 
 zapPool = 0.9
 presZapPool = 1.1
