@@ -15,8 +15,9 @@ data Gag = Gag {
   encore :: Float,
   splash :: Float,
   jump :: Float,
-  selfHeal :: Float
-} deriving (Eq, Ord)
+  selfHeal :: Float,
+  gagIndex :: Maybe Int -- used for sorting
+} deriving Eq
 instance Show Gag where
   show gag = foldr1 (++)
     [maybe undefined snd $ find ((encore gag ==) . fst)
@@ -28,6 +29,11 @@ instance Show Gag where
     ,if splash gag /= 1 then " Splash" else ""]
     where
       track = gagTrack gag
+instance Ord Gag where
+  g0 `compare` g1 = on compare f g0 g1
+    where
+      f Gag { gagTrack = track, encore = encore, splash = splash } =
+        (negate splash, encore, track)
 
 data Config = Config { hasEncore :: Bool, allowedGags :: [GagTrack], startingGags :: [GagTrack], players :: Integer }
 defaultConfig = Config False (enumFrom Trap) [Lure] 2
@@ -44,10 +50,14 @@ squirtSplash = 0.25
 presSquirtSplash = 0.5
 
 newGag :: GagTrack -> Integer -> Float -> Gag
-newGag track damage encore = Gag track damage False encore 1 1 1
+newGag track damage encore = Gag track damage False encore 1 1 1 Nothing
 
 damage :: Gag -> Integer
 damage gag = (jump gag `mul`) . (splash gag `mul`) . (encore gag `mul`) $ baseDamage gag
+
+index :: Gag -> Int
+index Gag { gagIndex = Just i } = i
+index Gag { gagIndex = Nothing } = 0
 
 gagValues :: [[Integer]]
 gagValues = [[12, 24, 30, 45, 60, 84, 90, 135], -- toon up
@@ -66,8 +76,8 @@ genGags tracks genGag = do
   j <- [0..7]
   let value = gagValues !! i !! j
   encore <- [1, soundEncore, presSoundEncore]
-  let gag = (newGag track value encore)
-  genGag gag value
+  let gag = newGag track value encore 
+  genGag gag { gagIndex = Just j } value
   
 gags, healGags :: [Gag]
 gags = genGags (enumFrom Trap) $ \ gag@Gag{ baseDamage = damage } j -> gag :
@@ -169,7 +179,7 @@ applyGags :: [Gag] -> Cog -> Maybe Cog
 applyGags = flip (foldrM applyGagTracks) . groupGags . reverse . sort
 
 -- testing
-fruitPie = newGag Throw 56 1
+fruitPie = newGag Throw 56 1 
 seltzer = newGag Squirt 30 1
 bowlingBall = newGag Drop 35 1
 
@@ -191,10 +201,13 @@ combR _ [] = []
 combR k xxs@(x:xs) = ((x:) <$> combR (k-1) xxs) ++ combR k xs 
 
 data Combo = Combo { comboDamage :: Integer, comboGags :: [Gag], startingGag :: Maybe Gag }
-           deriving (Eq, Ord)
+           deriving Eq
 instance Show Combo where
   show (Combo dmg gags startingGag) = intercalate " " $
     [show dmg, show gags, maybe "" show startingGag]
+instance Ord Combo where
+  c0 `compare` c1 = on compare f c0 c1
+    where f = liftM2 div sum length . map (abs . (subtract 4) . index) . comboGags
 
 findCombos, findHealCombos :: Config -> [Combo]
 findCombos (Config hasEncore gagTracks startingGagTracks players) =
