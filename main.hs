@@ -1,6 +1,7 @@
 import Data.List
 import Data.Foldable
 import Control.Monad
+import Control.Monad.Reader
 import Data.Char
 import Data.Function
 
@@ -11,6 +12,7 @@ data GagTrack = ToonUp | Trap | Lure | Throw | Squirt | Zap | Sound | Drop
 data Gag = Gag {
   gagTrack :: GagTrack,
   baseDamage :: Integer,
+  iouDamage :: Integer,
   prestige :: Bool,
   encore :: Float,
   splash :: Float,
@@ -35,8 +37,8 @@ instance Ord Gag where
       f Gag { gagTrack = track, encore = encore, splash = splash } =
         (negate splash, encore, track)
 
-data Config = Config { hasEncore :: Bool, allowedGags :: [GagTrack], startingGags :: [GagTrack], players :: Integer }
-defaultConfig = Config False (enumFrom Trap) [Lure] 2
+data Config = Config { hasEncore :: Bool, gagTracks :: [GagTrack], startingGagTracks :: [GagTrack], players :: Integer }
+defaultConfig = Config False (enumFrom Lure) [Lure] 2
 
 zapPool = 0.9
 presZapPool = 1.1
@@ -50,16 +52,16 @@ squirtSplash = 0.25
 presSquirtSplash = 0.5
 
 newGag :: GagTrack -> Integer -> Float -> Gag
-newGag track damage encore = Gag track damage False encore 1 1 0 Nothing
+newGag track damage encore = Gag track damage 0 False encore 1 1 0 Nothing
 
 damage :: Gag -> Integer
-damage gag = (jump gag `mul`) . (splash gag `mul`) . (encore gag `mul`) $ baseDamage gag
+damage gag = (iouDamage gag+) . (jump gag `mul`) . (splash gag `mul`) . (encore gag `mul`) $ baseDamage gag
 
 index :: Gag -> Int
 index Gag { gagIndex = Just i } = i
 index Gag { gagIndex = Nothing } = 0
 
-gagValues :: [[Integer]]
+gagValues, iouValues :: [[Integer]]
 gagValues = [[12, 24, 30, 45, 60, 84, 90, 135], -- toon up
               [14, 28, 45, 75, 115, 160, 220, 280], -- trap
               [5, 10, 15, 30, 55, 45, 100, 75], -- lure
@@ -68,19 +70,22 @@ gagValues = [[12, 24, 30, 45, 60, 84, 90, 135], -- toon up
               [12, 20, 36, 60, 90, 140, 180, 240], -- zap
               [5, 10, 16, 23, 30, 50, 70, 90], -- sound
               [8, 12, 35, 56, 90, 140, 200, 240]] -- drop
-
-genGags :: [GagTrack] -> (Gag -> Integer -> [Gag]) -> [Gag]
-genGags tracks genGag = do
-  track <- tracks
-  let i = fromEnum track
-  j <- [0..7]
-  let value = gagValues !! i !! j
-  encore <- [1, soundEncore, presSoundEncore]
-  let gag = newGag track value encore 
-  genGag gag { gagIndex = Just j } value
+iouValues = undefined
+genGags ::  (Gag -> Integer -> [Gag]) -> Reader Config [Gag]
+genGags genGag = do
+  -- TODO hasIous
+  Config { hasEncore = hasEncore, gagTracks = tracks } <- ask
+  return $ do
+    track <- tracks
+    let i = fromEnum track
+    j <- [0..7]
+    let value = gagValues !! i !! j
+    encore <- 1 : if hasEncore then [soundEncore, presSoundEncore] else mempty
+    let gag = newGag track value encore 
+    genGag gag { gagIndex = Just j, iouDamage = 0 } value
   
-gags, healGags :: [Gag]
-gags = genGags (enumFrom Trap) $ \ gag@Gag{ baseDamage = damage } j -> gag :
+gags, startingGags, selfHealGags, otherHealGags, healGags :: Reader Config [Gag]
+gags = genGags $ \ gag@Gag{ baseDamage = damage } j -> gag :
   case gagTrack gag of
        Trap -> [gag { prestige = True, baseDamage = mul 1.2 damage }]
        Lure -> [gag { prestige = True, baseDamage = mul (if mod j 2 == 0 then presSingleLure else presGroupLure) damage }]
@@ -92,11 +97,18 @@ gags = genGags (enumFrom Trap) $ \ gag@Gag{ baseDamage = damage } j -> gag :
          let pool = if pres then presZapPool else zapPool
          return gag { prestige = pres, jump = pool * split }
        _ -> []
-healGags = genGags [ToonUp, Throw] $ \ gag _ ->
-  case gagTrack gag of 
-       ToonUp -> gag { selfHeal = 1 } :
-         [gag { prestige = pres, selfHeal = if pres then 0.4 else 0.25 } | pres <- [False, True]] 
-       Throw -> return gag { prestige = True, selfHeal = 0.2 }
+startingGags = do
+  Config { startingGagTracks = tracks } <- ask
+  filter ((`elem` tracks) . gagTrack) <$> gags 
+selfHealGags = genGags $ \ gag _ ->
+  case gagTrack gag of
+       ToonUp -> do
+         pres <- [False, True]
+         return gag { prestige = pres, selfHeal = if pres then 0.4 else 0.25 }
+       Throw -> do
+         return gag { prestige = True, selfHeal = 0.2 }
+otherHealGags = genGags $ \ gag _ -> return gag { selfHeal = 1 }
+healGags = undefined
 
 -- needed for combos
 groupGags :: [Gag] -> [[Gag]]
@@ -144,9 +156,10 @@ applyGagTracks gags cog
   | any id [
       (track >= Zap || track == Lure || squirtSplash) && lured cog > 0, -- luring does nothing
       track > Lure && trapped cog > 0, -- trap does nothing
-      track == Trap && (length gags > 1 || trapped cog > 0), -- using trap twice
+      track == Trap && (length gags > 1 || trapped cog > 0 || lured cog > 0), -- using trap twice or trap on lured cog
       track == Lure && (length gags > 1 || lured cog > 0), -- using lure twice
-      track == Zap && not (soaked cog) -- dry zap
+      track == Zap && not (soaked cog), -- dry zap
+      track == Sound && lured cog > 0 -- lure does nothing (again)
   ] = Nothing
   | otherwise = Just $ maybe id applyEffect (gagEffect track) . applyDamage dmg $ cog
   where
@@ -213,31 +226,30 @@ instance Ord Combo where
         liftM2 div sum length $ map (abs . (subtract 4) . index) $
         comboGags ++ maybe [] (:[]) startingGag
 
-findCombos, findHealCombos :: Config -> [Combo]
-findCombos (Config hasEncore gagTracks startingGagTracks players) =
-  foldMap findCombosN [1..players]
-  where
-    findCombosN n = do
-      startingGag <- Nothing : (Just <$> gagFilter startingGagTracks gags)
-      gags <- combR n $ gagFilter gagTracks gags
-      Just damage <- return $ fmap hp $ applyGags gags =<<
-        (case startingGag of 
-             Nothing -> Just
-             Just gag -> applyGag gag)
-        newCog
-      guard $ damage > 0 
-      return $ Combo damage gags startingGag
-      where
-        gagFilter :: [GagTrack] -> [Gag] -> [Gag]
-        gagFilter tracks = filter $ \ Gag { encore = encore, gagTrack = track } ->
-          (hasEncore || encore <= 1) && elem track tracks
-findHealCombos Config { hasEncore = hasEncore, players = players }
-  = foldMap findCombosN [1..players]
-  where
-    findCombosN n = do
-      gags <- filter (any ((/= 1) . selfHeal)) $ combR n $
-        filter ((hasEncore||) . (<=1) . encore) healGags
-      return $ Combo (foldr1 (+) $ map (mul <$> selfHeal <*> damage) gags) gags Nothing
+findCombos, findHealCombos :: Reader Config [Combo]
+findCombos = do
+  config@Config { hasEncore = hasEncore, players = players } <- ask
+  gags <- gags
+  startingGags <- startingGags
+  let findCombosN n = do
+        startingGag <- Nothing : map Just startingGags
+        gags <- combR n gags
+        Just damage <- return $ fmap hp $ applyGags gags =<<
+          (case startingGag of 
+                Nothing -> Just
+                Just gag -> applyGag gag)
+          newCog
+        guard $ damage > 0 
+        return $ Combo damage gags startingGag
+  return $ foldMap findCombosN [1..players]
+findHealCombos = do
+  Config { hasEncore = hasEncore, players = players } <- ask
+  selfHealGags <- selfHealGags
+  otherHealGags <- otherHealGags
+  let findCombosN n = do
+        gags <- concat $ liftM2 (:) <$> [selfHealGags, []] <*> pure (combR (n-1) otherHealGags)
+        return $ Combo (foldr1 (+) $ map (mul <$> selfHeal <*> damage) gags) gags Nothing
+  return $ foldMap findCombosN [1..players]
 
 cogLevels = [1..20]
 
@@ -249,7 +261,7 @@ cogHPs = addExes $ (\ n -> (n + 1) * (n + 2)) <$> cogLevels
 lbHPs = addExes $ [(\ n -> (n * (n + 1) + 1)), (\ n -> (n + 2) * (n + 3) - 2)] <*> cogLevels
 mgrHPs = [240, 320, 465, 600]
 
-[combos, healCombos] = [findCombos, findHealCombos] <*> pure defaultConfig
+[combos, healCombos] = runReader <$> [findCombos, findHealCombos] <*> pure defaultConfig
 
 search :: [Integer] -> [Combo] -> IO ()
 search hps combos = mapM_ print $
