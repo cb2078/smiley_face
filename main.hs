@@ -121,6 +121,7 @@ selfHealGags = genGags $ \ gag _ ->
          return gag { prestige = pres, selfHeal = if pres then 0.4 else 0.25 }
        Throw -> do
          return gag { prestige = True, selfHeal = 0.2 }
+       _ -> mempty
 otherHealGags = genGags $ \ gag _ -> return gag { selfHeal = 1 }
 healGags = undefined
 
