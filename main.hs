@@ -123,7 +123,7 @@ selfHealGags = genGags $ \ gag _ ->
          return gag { prestige = True, selfHeal = 0.2 }
        _ -> mempty
 otherHealGags = genGags $ \ gag _ -> return gag { selfHeal = 1 }
-healGags = undefined
+healGags = liftM2 (++) selfHealGags otherHealGags
 
 -- needed for combos
 groupGags :: [Gag] -> [[Gag]]
