@@ -12,7 +12,7 @@ data GagTrack = ToonUp | Trap | Lure | Throw | Squirt | Zap | Sound | Drop
 data Gag = Gag {
   gagTrack :: GagTrack,
   baseDamage :: Integer,
-  iouDamage :: Integer,
+  iouValue :: Integer,
   prestige :: Bool,
   encore :: Float,
   splash :: Float,
@@ -22,7 +22,8 @@ data Gag = Gag {
 } deriving Eq
 instance Show Gag where
   show gag = foldr1 (++)
-    [maybe undefined snd $ find ((encore gag ==) . fst)
+    [if iouValue gag > 0 then "IOU" ++ show (iouValue gag) ++ " " else ""
+    ,maybe undefined snd $ find ((encore gag ==) . fst)
       [(1, ""), (soundEncore, "Encore "), (presSoundEncore, "PresEncore "), (soundWinded, "Winded ")]
     ,if prestige gag then "Pres" else ""
     ,show track
@@ -37,8 +38,14 @@ instance Ord Gag where
       f Gag { gagTrack = track, encore = encore, splash = splash } =
         (negate splash, encore, track)
 
-data Config = Config { hasEncore :: Bool, gagTracks :: [GagTrack], startingGagTracks :: [GagTrack], players :: Integer }
-defaultConfig = Config False (enumFrom Lure) [Lure] 2
+data Config = Config {
+  hasEncore :: Bool,
+  hasIOUs :: Bool,
+  gagTracks :: [GagTrack],
+  startingGagTracks :: [GagTrack],
+  players :: Integer
+}
+defaultConfig = Config False True (enumFrom Lure) [Lure] 2
 
 zapPool = 0.9
 presZapPool = 1.1
@@ -55,7 +62,7 @@ newGag :: GagTrack -> Integer -> Float -> Gag
 newGag track damage encore = Gag track damage 0 False encore 1 1 0 Nothing
 
 damage :: Gag -> Integer
-damage gag = (iouDamage gag+) . (jump gag `mul`) . (splash gag `mul`) . (encore gag `mul`) $ baseDamage gag
+damage gag = (iouValue gag+) . (jump gag `mul`) . (splash gag `mul`) . (encore gag `mul`) $ baseDamage gag
 
 index :: Gag -> Int
 index Gag { gagIndex = Just i } = i
@@ -70,20 +77,27 @@ gagValues = [[12, 24, 30, 45, 60, 84, 90, 135], -- toon up
               [12, 20, 36, 60, 90, 140, 180, 240], -- zap
               [5, 10, 16, 23, 30, 50, 70, 90], -- sound
               [8, 12, 35, 56, 90, 140, 200, 240]] -- drop
-iouValues = undefined
+iouValues = map (15:) -- add rain
+  [[25, 35, 60],
+   [65, 90, 170],
+   [15, 20, 30],
+   [30, 40, 70],
+   [25, 35, 60],
+   [25, 35, 60],
+   [15, 20, 35],
+   [35, 45, 80]]
 genGags ::  (Gag -> Integer -> [Gag]) -> Reader Config [Gag]
 genGags genGag = do
-  -- TODO hasIous
-  Config { hasEncore = hasEncore, gagTracks = tracks } <- ask
+  Config { hasEncore = hasEncore, hasIOUs = hasIOUs, gagTracks = tracks } <- ask
   return $ do
     track <- tracks
     let i = fromEnum track
     j <- [0..7]
     let value = gagValues !! i !! j
     encore <- 1 : if hasEncore then [soundEncore, presSoundEncore] else mempty
+    iou <- 0 : if hasIOUs then iouValues !! i else mempty
     let gag = newGag track value encore 
-    genGag gag { gagIndex = Just j, iouDamage = 0 } value
-  
+    genGag gag { gagIndex = Just j, iouValue = iou } value
 gags, startingGags, selfHealGags, otherHealGags, healGags :: Reader Config [Gag]
 gags = genGags $ \ gag@Gag{ baseDamage = damage } j -> gag :
   case gagTrack gag of
