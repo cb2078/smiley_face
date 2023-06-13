@@ -280,7 +280,7 @@ mgrHPs = [240, 320, 465, 600]
 
 search :: [Integer] -> [Combo] -> IO ()
 search hps combos = mapM_ print $
-  sort $ foldMap (\ hp -> filter ((==hp) . comboDamage) combos) $ nub hps
+  foldMap (\ hp -> filter ((==hp) . comboDamage) combos) $ nub hps
 
 main :: IO ()
 main = do
