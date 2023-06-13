@@ -45,7 +45,7 @@ data Config = Config {
   startingGagTracks :: [GagTrack],
   players :: Integer
 }
-defaultConfig = Config False True (enumFrom Lure) [Lure] 2
+defaultConfig = Config False False (enumFrom Lure) [Lure] 2
 
 zapPool = 0.9
 presZapPool = 1.1
