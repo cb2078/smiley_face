@@ -50,8 +50,8 @@ defaultConfig = Config False True (enumFrom Lure) [Lure] 2
 zapPool = 0.9
 presZapPool = 1.1
 soundWinded = 0.5
-soundEncore = 1.05
-presSoundEncore = 1.15
+soundEncore = 1.06
+presSoundEncore = 1.16
 presSingleLure = 1.15
 presGroupLure = 1.25
 presTrap = 1.2
@@ -70,13 +70,13 @@ index Gag { gagIndex = Nothing } = 0
 
 gagValues, iouValues :: [[Integer]]
 gagValues = [[12, 24, 30, 45, 60, 84, 90, 135], -- toon up
-              [14, 28, 45, 75, 115, 160, 220, 280], -- trap
-              [5, 10, 15, 30, 55, 45, 100, 75], -- lure
-              [8, 13, 20, 35, 56, 90, 130, 170], -- throw
-              [4, 8, 12, 21, 30, 56, 85, 115], -- squirt
-              [12, 20, 36, 60, 90, 140, 180, 240], -- zap
-              [5, 10, 16, 23, 30, 50, 70, 90], -- sound
-              [8, 12, 35, 56, 90, 140, 200, 240]] -- drop
+             [14, 28, 45, 75, 115, 160, 220, 280], -- trap
+             [5, 10, 25, 30, 65, 50, 100, 75], -- lure
+             [8, 13, 20, 35, 56, 90, 130, 170], -- throw
+             [4, 8, 12, 21, 30, 60, 90, 120], -- squirt
+             [12, 20, 36, 60, 90, 140, 190, 240], -- zap
+             [5, 10, 16, 23, 30, 50, 70, 90], -- sound
+             [8, 12, 35, 56, 90, 140, 200, 240]] -- drop
 iouValues = map (15:) -- add rain
   [[25, 35, 60],
    [65, 90, 170],
