@@ -86,7 +86,7 @@ iouValues = map (15:) -- add rain
    [25, 35, 60],
    [15, 20, 35],
    [35, 45, 80]]
-genGags ::  (Gag -> Integer -> [Gag]) -> Reader Config [Gag]
+genGags ::  (Gag -> Int -> [Gag]) -> Reader Config [Gag]
 genGags genGag = do
   Config { hasEncore = hasEncore, hasIOUs = hasIOUs, gagTracks = tracks } <- ask
   return $ do
@@ -97,12 +97,12 @@ genGags genGag = do
     encore <- 1 : if hasEncore then [soundEncore, presSoundEncore] else mempty
     iou <- 0 : if hasIOUs then iouValues !! i else mempty
     let gag = newGag track value encore 
-    genGag gag { gagIndex = Just j, iouValue = iou } value
+    genGag gag { gagIndex = Just j, iouValue = iou } j
 gags, startingGags, selfHealGags, otherHealGags, healGags :: Reader Config [Gag]
 gags = genGags $ \ gag@Gag{ baseDamage = damage } j -> gag :
   case gagTrack gag of
        Trap -> [gag { prestige = True, baseDamage = mul 1.2 damage }]
-       Lure -> [gag { prestige = True, baseDamage = mul (if mod j 2 == 0 then presSingleLure else presGroupLure) damage }]
+       Lure -> [gag { prestige = True, baseDamage = mul (if (mod j 2) == 0 then presSingleLure else presGroupLure) damage }]
        Squirt -> [gag { splash = squirtSplash }, gag { prestige = True, splash = presSquirtSplash }] -- squirt splash
        Sound -> [gag { encore = soundWinded }] -- winded
        Zap -> do
