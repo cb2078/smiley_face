@@ -1,8 +1,8 @@
 import Control.Monad
 import Control.Monad.State
+import Data.List
 
 -- TODO
--- combo damage
 -- prestiges
 -- TU
 -- squirt splash / zap jump
@@ -96,32 +96,44 @@ unsoak = do
   cog <- get
   put cog { soaked = False }
 
-attack :: Gag -> State Cog ()
-attack gag = do
+useGags :: [Gag] -> State Cog ()
+useGags gags = do
   cog <- get 
-  let value = gagDamage gag
-  case gagTrack gag of
-       Trap -> trap value
-       Lure -> lure value
+  case gagTrack (head gags) of
+       Trap -> if (length gags == 1 && trapped cog == 0)
+         then trap $ head values
+         else trap 0
+       Lure -> lure (maximum values)
        Throw -> do
-         damage value
+         damage (combo `mul` sum values)
          mark
          unlure
        Squirt -> do
-         damage value
+         damage (combo `mul` sum values)
          soak
          unlure
        Zap -> do
          if soaked cog
             then do
-              damage value
+              damage (sum values)
               unsoak
               unlure
             else unlure
        Sound -> do
-         damage value
+         damage (sum values)
          unlure
-       Drop -> unless (lured cog > 0) (damage value)
+       Drop -> unless (lured cog > 0)
+         (damage (combo `mul` sum values))
+  where
+    values = gagDamage <$> gags
+    track = gagTrack $ head gags
+    combo | length gags == 1 = 1
+          | track == Throw = 1.2
+          | track == Drop = 1.3
+          | otherwise = 1
+
+useGag :: Gag -> State Cog ()
+useGag = useGags . pure
 
 heal :: [Gag] -> Toon -> Toon
 heal = undefined
@@ -129,8 +141,8 @@ heal = undefined
 main :: IO ()
 main = do
   let exp = do
-        attack (Gag Lure 55 False)
-        attack fruitPie
-        attack seltzer
-        attack ball
+        useGag (Gag Lure 55 False)
+        useGag fruitPie
+        useGag seltzer
+        useGag ball
   print $ cogHP $ execState exp newCog
