@@ -99,17 +99,18 @@ unsoak = do
 useGags :: [Gag] -> State Cog ()
 useGags gags = do
   cog <- get 
+  let addKnockback = map (lured cog +)
   case gagTrack (head gags) of
        Trap -> if (length gags == 1 && trapped cog == 0)
          then trap $ head values
          else trap 0
        Lure -> lure (maximum values)
        Throw -> do
-         damage (combo `mul` sum values)
+         damage $ combo `mul` sum (addKnockback values)
          mark
          unlure
        Squirt -> do
-         damage (combo `mul` sum values)
+         damage $ combo `mul` sum (addKnockback values)
          soak
          unlure
        Zap -> do
