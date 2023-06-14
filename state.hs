@@ -16,9 +16,8 @@ data GagTrack = ToonUp | Trap | Lure | Throw | Squirt | Zap | Sound | Drop
 
 data Gag = Gag {
   gagTrack :: GagTrack,
-  gagDamage :: Int,
-  prestiged :: Bool,
-  gagLevel :: Int
+  gagLevel :: Int,
+  prestiged :: Bool
 } deriving Show
 
 gagLevels :: [Int]
@@ -34,13 +33,16 @@ gagValues = [[12, 24, 30, 45, 60, 84, 90, 135], -- toon up
              [5, 10, 16, 23, 30, 50, 70, 90], -- sound
              [8, 12, 35, 56, 90, 140, 200, 240]] -- drop
 
+gagDamage :: Gag -> Int
+gagDamage gag = gagValues !! track !! gagLevel gag
+  where track = fromEnum $ gagTrack gag
+
 gags :: [Gag]
 gags = do
   track <- enumFrom ToonUp
-  let i = fromEnum track
-  j <- gagLevels
+  level <- gagLevels
   prestige <- [False, True]
-  return $ Gag track (gagValues !! i !! j) prestige j
+  return $ Gag track level prestige 
   
 data Toon = Toon { toonHP :: Int } -- TODO effects
 
@@ -113,14 +115,15 @@ useGags gags = do
   case gagTrack (head gags) of
        Trap -> if (length gags == 1 && trapped cog == 0)
          then do
-           let gag@Gag { gagDamage = value } = head gags
+           let gag = head gags
+               value = gagDamage gag
            if prestiged gag
               then trap (1.2 `mul` value)
               else trap value
          else trap 0
        Lure -> do
          let gag = maximumBy (compare `on` gagDamage) gags
-         let value = gagDamage gag
+             value = gagDamage gag
          if prestiged gag
             then let multiplier = 
                        if gagLevel gag `mod` 2 == 0
@@ -170,8 +173,8 @@ heal = undefined
 main :: IO ()
 main = do
   let exp = do
-        useGag (Gag Trap 90 False 0)
-        useGag (Gag Lure 5 False 0)
-        useGag (Gag Squirt 60 False 0)
-        useGag (Gag Drop 90 True 0)
+        useGag (Gag Trap 3 True)
+        useGag (Gag Lure 0 False)
+        useGag (Gag Squirt 5 False)
+        useGag (Gag Drop 4 True)
   print $ cogHP $ execState exp newCog
