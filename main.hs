@@ -21,15 +21,15 @@ data Gag = Gag {
   gagIndex :: Maybe Int -- used for sorting
 } deriving Eq
 instance Show Gag where
-  show gag = foldr1 (++)
-    [if iouValue gag > 0 then "IOU" ++ show (iouValue gag) ++ " " else ""
-    ,maybe undefined snd $ find ((encore gag ==) . fst)
-      [(1, ""), (soundEncore, "Encore "), (presSoundEncore, "PresEncore "), (soundWinded, "Winded ")]
-    ,if prestige gag then "Pres" else ""
-    ,show track
-    ,show (baseDamage gag)
-    ,if jump gag <= (presZapPool / 2) then " SplitPool" else if jump gag /= 1 then " Pool" else ""
-    ,if splash gag /= 1 then " Splash" else ""]
+  show gag = concat
+    [if iouValue gag > 0 then "IOU" ++ show (iouValue gag) ++ " " else "",
+     maybe undefined snd $ find ((encore gag ==) . fst)
+       [(1, ""), (soundEncore, "Encore "), (presSoundEncore, "PresEncore "), (soundWinded, "Winded ")],
+     if prestige gag then "Pres" else "",
+     show track,
+     show (baseDamage gag),
+     if jump gag <= (presZapPool / 2) then " SplitPool" else if jump gag /= 1 then " Pool" else "",
+     if splash gag /= 1 then " Splash" else ""]
     where
       track = gagTrack gag
 instance Ord Gag where
@@ -94,16 +94,23 @@ genGags genGag = do
     let i = fromEnum track
     j <- [0..7]
     let value = gagValues !! i !! j
-    encore <- 1 : if hasEncore then [soundEncore, presSoundEncore] else mempty
-    iou <- 0 : if hasIOUs then iouValues !! i else mempty
+    encore <- 1 : if hasEncore then [soundEncore, presSoundEncore] else []
+    iou <- 0 : if hasIOUs then iouValues !! i else []
     let gag = newGag track value encore 
     genGag gag { gagIndex = Just j, iouValue = iou } j
 gags, startingGags, selfHealGags, otherHealGags, healGags :: Reader Config [Gag]
 gags = genGags $ \ gag@Gag{ baseDamage = damage } j -> gag :
   case gagTrack gag of
        Trap -> [gag { prestige = True, baseDamage = mul 1.2 damage }]
-       Lure -> [gag { prestige = True, baseDamage = mul (if (mod j 2) == 0 then presSingleLure else presGroupLure) damage }]
-       Squirt -> [gag { splash = squirtSplash }, gag { prestige = True, splash = presSquirtSplash }] -- squirt splash
+       Lure ->
+         let knockbackMultiplier =
+              if (mod j 2) == 0
+               then presSingleLure
+               else presGroupLure
+         in [gag { prestige = True, baseDamage = mul knockbackMultiplier damage }]
+       Squirt ->
+         [gag { splash = squirtSplash }
+         , gag { prestige = True, splash = presSquirtSplash }] -- squirt splash
        Sound -> [gag { encore = soundWinded }] -- winded
        Zap -> do
          pres <- [True, False]
@@ -140,8 +147,8 @@ gagEffect Lure = Just Lured
 gagEffect Squirt = Just Soaked
 gagEffect _ = Nothing
 
-gagCombo :: Fractional a => [Gag] -> a
-gagCombo gags
+comboMultiplier :: RealFrac a => [Gag] -> a
+comboMultiplier gags
   | length gags == 1 = 1
   | elem track [Throw, Squirt] = 1.2
   | track == Drop = 1.3
@@ -167,16 +174,15 @@ mul :: (RealFrac a, Integral b) => a -> b -> b
 mul x = ceiling . (x*) . fromIntegral
 
 applyGagTracks :: [Gag] -> Cog -> Maybe Cog
-applyGagTracks gags cog 
-  | any id [
-      (track >= Zap || track == Lure || squirtSplash) && lured cog > 0, -- luring does nothing
-      track > Lure && trapped cog > 0, -- trap does nothing
-      track == Trap && (length gags > 1 || trapped cog > 0 || lured cog > 0), -- using trap twice or trap on lured cog
-      track == Lure && (length gags > 1 || lured cog > 0), -- using lure twice
-      track == Zap && not (soaked cog), -- dry zap
-      track == Sound && lured cog > 0 -- lure does nothing (again)
-  ] = Nothing
-  | otherwise = Just $ maybe id applyEffect (gagEffect track) . applyDamage dmg $ cog
+applyGagTracks gags cog =
+  if or [(track >= Zap || track == Lure || squirtSplash) && lured cog > 0, -- luring does nothing
+         track > Lure && trapped cog > 0, -- trap does nothing
+         track == Trap && (length gags > 1 || trapped cog > 0 || lured cog > 0), -- using trap twice or trap on lured cog
+         track == Lure && (length gags > 1 || lured cog > 0), -- using lure twice
+         track == Zap && not (soaked cog), -- dry zap
+         track == Sound && lured cog > 0] -- lure does nothing (again)
+    then Nothing
+    else Just $ maybe id applyEffect (gagEffect track) . applyDamage dmg $ cog
   where
     track = gagTrack $ head gags
     squirtSplash = track == Squirt && all ((/=1) . splash) gags
@@ -184,7 +190,7 @@ applyGagTracks gags cog
     dmg = case track of
                Trap -> 0
                Lure -> trapped cog
-               _ -> gagCombo gags `mul` (foldr1 (+) . map ((knockback+) . damage)) gags 
+               _ -> comboMultiplier gags `mul` (sum . map ((knockback+) . damage)) gags 
     applyEffect :: Effect -> Cog -> Cog
     applyEffect effect cog =
       case effect of
@@ -235,11 +241,10 @@ instance Show Combo where
   show (Combo dmg gags startingGag) = intercalate " " $
     [show dmg, show gags, maybe "" show startingGag]
 instance Ord Combo where
-  c0 `compare` c1 = on compare f c0 c1
-    where
-      f Combo { comboGags = comboGags, startingGag = startingGag } =
-        liftM2 div sum length $ map (abs . (subtract 4) . index) $
-        comboGags ++ maybe [] (:[]) startingGag
+  compare = on compare $
+    \ Combo { comboGags = comboGags, startingGag = startingGag } ->
+      liftM2 div sum length $ map (abs . (subtract 4) . index) $
+      comboGags ++ maybe [] (:[]) startingGag
 
 findCombos, findHealCombos :: Reader Config [Combo]
 findCombos = do
