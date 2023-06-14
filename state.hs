@@ -4,7 +4,6 @@ import Data.List
 import Data.Function
 
 -- TODO
--- prestiges
 -- TU
 -- squirt splash / zap jump
 
@@ -49,12 +48,17 @@ data Cog = Cog {
   cogHP :: Int,
   trapped :: Int,
   lured :: Int,
+  dazed :: Bool,
   marked :: Bool,
   soaked :: Bool
 } deriving Show -- TODO effects
 
 newCog :: Cog
-newCog = Cog 0 0 0 False False
+newCog = Cog 0 0 0 False False False
+
+countCogEffects :: Cog -> Int
+countCogEffects Cog { dazed = dazed, marked = marked, soaked = soaked } =
+  sum $ map fromEnum [dazed, marked, soaked]
 
 damage :: Int -> State Cog ()
 damage value = do
@@ -74,12 +78,18 @@ lure knockback = do
      then do
        damage (trapped cog)
        trap 0
+       daze
      else put cog { lured = knockback }
 
 unlure :: State Cog ()
 unlure = do
   cog <- get
   put cog { lured = 0 }
+
+daze :: State Cog ()
+daze = do
+  cog <- get
+  put cog { dazed = True }
 
 mark :: State Cog ()
 mark = do
@@ -136,8 +146,13 @@ useGags gags = do
        Sound -> do
          damage (sum values)
          unlure
-       Drop -> unless (lured cog > 0)
-         (damage (combo `mul` sum values))
+       Drop -> when (lured cog == 0) $
+         let dropValue gag = multiplier `mul` gagDamage gag
+               where
+                 multiplier | gagTrack gag /= Drop = undefined
+                            | prestiged gag = 1.1 + 0.05 * (fromIntegral $ countCogEffects cog)
+                            | otherwise = 1
+         in damage (combo `mul` sum (map dropValue gags))
   where
     values = gagDamage <$> gags
     track = gagTrack $ head gags
@@ -155,7 +170,8 @@ heal = undefined
 main :: IO ()
 main = do
   let exp = do
-        useGag (Gag Trap 120 True 0)
-        useGag (Gag Trap 120 True 0)
-        useGag (Gag Lure 55 False 0)
+        useGag (Gag Trap 90 False 0)
+        useGag (Gag Lure 5 False 0)
+        useGag (Gag Squirt 60 False 0)
+        useGag (Gag Drop 90 True 0)
   print $ cogHP $ execState exp newCog
