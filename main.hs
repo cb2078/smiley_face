@@ -62,7 +62,7 @@ newGag :: GagTrack -> Integer -> Float -> Gag
 newGag track damage encore = Gag track damage 0 False encore 1 1 0 Nothing
 
 damage :: Gag -> Integer
-damage gag = (iouValue gag+) . (jump gag `mul`) . (splash gag `mul`) . (encore gag `mul`) $ baseDamage gag
+damage gag = (splash gag `mul`) . (iouValue gag+) . (jump gag `mul`) . (encore gag `mul`) $ baseDamage gag
 
 index :: Gag -> Int
 index Gag { gagIndex = Just i } = i
