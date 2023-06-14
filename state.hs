@@ -1,6 +1,7 @@
 import Control.Monad
 import Control.Monad.State
 import Data.List
+import Data.Function
 
 -- TODO
 -- prestiges
@@ -14,8 +15,12 @@ mul x = ceiling . (x*) . fromIntegral
 data GagTrack = ToonUp | Trap | Lure | Throw | Squirt | Zap | Sound | Drop
               deriving (Eq, Ord, Enum, Show)
 
-data Gag = Gag { gagTrack :: GagTrack, gagDamage :: Int, prestige :: Bool}
-         deriving Show
+data Gag = Gag {
+  gagTrack :: GagTrack,
+  gagDamage :: Int,
+  prestiged :: Bool,
+  gagLevel :: Int
+} deriving Show
 
 gagLevels :: [Int]
 gagLevels = [0 .. 7]
@@ -36,13 +41,8 @@ gags = do
   let i = fromEnum track
   j <- gagLevels
   prestige <- [False, True]
-  return $ Gag track (gagValues !! i !! j) prestige
+  return $ Gag track (gagValues !! i !! j) prestige j
   
-seltzer, fruitPie, ball :: Gag
-fruitPie = Gag Throw 56 False
-seltzer = Gag Squirt 30 False
-ball = Gag Drop 35 False
-
 data Toon = Toon { toonHP :: Int } -- TODO effects
 
 data Cog = Cog {
@@ -102,9 +102,22 @@ useGags gags = do
   let addKnockback = map (lured cog +)
   case gagTrack (head gags) of
        Trap -> if (length gags == 1 && trapped cog == 0)
-         then trap $ head values
+         then do
+           let gag@Gag { gagDamage = value } = head gags
+           if prestiged gag
+              then trap (1.2 `mul` value)
+              else trap value
          else trap 0
-       Lure -> lure (maximum values)
+       Lure -> do
+         let gag = maximumBy (compare `on` gagDamage) gags
+         let value = gagDamage gag
+         if prestiged gag
+            then let multiplier = 
+                       if gagLevel gag `mod` 2 == 0
+                          then 1.15
+                          else 1.25
+                 in lure (multiplier `mul` value)
+            else lure value
        Throw -> do
          damage $ combo `mul` sum (addKnockback values)
          mark
@@ -142,8 +155,7 @@ heal = undefined
 main :: IO ()
 main = do
   let exp = do
-        useGag (Gag Lure 55 False)
-        useGag fruitPie
-        useGag seltzer
-        useGag ball
+        useGag (Gag Trap 120 True 0)
+        useGag (Gag Trap 120 True 0)
+        useGag (Gag Lure 55 False 0)
   print $ cogHP $ execState exp newCog
