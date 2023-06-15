@@ -4,7 +4,6 @@ import Data.List
 import Data.Function
 
 -- TODO
--- TU
 -- squirt splash / zap jump
 
 -- how TTCC does decimal calculations
@@ -44,7 +43,10 @@ gags = do
   prestige <- [False, True]
   return $ Gag track level prestige 
   
-data Toon = Toon { toonHP :: Int } -- TODO effects
+data Toon = Toon { toonHP :: Int } deriving Show -- TODO effects
+
+newToon :: Toon
+newToon = Toon 0
 
 data Cog = Cog {
   cogHP :: Int,
@@ -53,7 +55,7 @@ data Cog = Cog {
   dazed :: Bool,
   marked :: Bool,
   soaked :: Bool
-} deriving Show -- TODO effects
+} deriving Show 
 
 newCog :: Cog
 newCog = Cog 0 0 0 False False False
@@ -167,14 +169,25 @@ useGags gags = do
 useGag :: Gag -> State Cog ()
 useGag = useGags . pure
 
-heal :: [Gag] -> Toon -> Toon
-heal = undefined
+heal :: Int -> State Toon ()
+heal value = do
+  toon <- get
+  put toon { toonHP = toonHP toon + value }
+
+useHeal :: Gag -> State Toon ()
+useHeal gag = do
+  toon <- get
+  case gagTrack gag of
+       ToonUp ->
+         let multiplier = if prestiged gag then 0.4 else 0.25
+         in heal (multiplier `mul` value) 
+       Throw -> when (prestiged gag) (heal (0.25 `mul` value))
+  where
+    value = gagDamage gag
 
 main :: IO ()
 main = do
   let exp = do
-        useGag (Gag Trap 3 True)
-        useGag (Gag Lure 0 False)
-        useGag (Gag Squirt 5 False)
-        useGag (Gag Drop 4 True)
-  print $ cogHP $ execState exp newCog
+        useHeal (Gag ToonUp 4 False)
+        heal 100
+  print $ execState exp newToon
