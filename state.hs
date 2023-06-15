@@ -215,7 +215,7 @@ useGags gags = foldr1 (>>) (useGagTracks <$> groupGags gags)
           where
             multiplier | gagTrack gag /= Drop = undefined
                        | prestiged gag =
-                           if count > 1 
+                           if count > 0 
                               then Just $ 1.10 + 0.05 * (count - 1)
                               else Nothing
                        | otherwise = Just 1
