@@ -30,7 +30,7 @@ gagValues = [[12, 24, 30, 45, 60, 84, 90, 135], -- toon up
              [4, 8, 12, 21, 30, 60, 90, 120], -- squirt
              [12, 20, 36, 60, 90, 140, 190, 240], -- zap
              [5, 10, 16, 23, 30, 50, 70, 90], -- sound
-             [8, 12, 35, 56, 90, 140, 200, 240]] -- drop
+             [8, 12, 35, 56, 90, 140, 200, 250]] -- drop
 
 gagDamage :: Gag -> Int
 gagDamage gag = gagValues !! track !! gagLevel gag
