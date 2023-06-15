@@ -185,9 +185,40 @@ useHeal gag = do
   where
     value = gagDamage gag
 
+data Combo = Combo {
+  comboDamage :: Int,
+  comboGags :: [Gag]
+  -- TODO starting gag
+} deriving Show
+
+-- TODO DP
+comboRep :: Int -> [a] -> [[a]]
+comboRep 0 _ = [[]]
+comboRep _ [] = []
+comboRep k xxs@(x:xs) = ((x:) <$> comboRep (k-1) xxs) ++ comboRep k xs
+
+-- TODO
+-- ignore some combos (where some gags do nothing or deal 0 damage)
+cogCombos :: Int -> [Combo]
+cogCombos players = concatMap combosN [1 .. players]
+  where
+    combosN n = do
+      gags <- comboRep n attackGags
+      let hp = cogHP $ execState (useGags gags) newCog
+      return (Combo hp gags)
+      where
+        attackGags = filter ((/= ToonUp) . gagTrack) gags
+
+toonCombos :: [Combo]   
+toonCombos = do
+  gag <- healGags
+  let hp = toonHP $ execState (useHeal gag) newToon
+  return (Combo hp [gag])
+  where
+    healTracks = [ToonUp, Throw]
+    healGags = filter ((`elem` healTracks) . gagTrack) gags
+
 main :: IO ()
 main = do
-  let exp = do
-        useHeal (Gag ToonUp 4 False)
-        heal 100
-  print $ execState exp newToon
+  print . length $ cogCombos 2
+  print . length $ toonCombos
