@@ -7,7 +7,7 @@ import Data.Function
 -- squirt splash / zap jump
 
 -- how TTCC does decimal calculations
-mul :: (RealFrac a, Integral b) => a -> b -> b
+mul :: Integral b => Rational -> b -> b
 mul x = ceiling . (x*) . fromIntegral
 
 data GagTrack = ToonUp | Trap | Lure | Throw | Squirt | Zap | Sound | Drop
