@@ -17,7 +17,13 @@ data Gag = Gag {
   gagTrack :: GagTrack,
   gagLevel :: Int,
   prestiged :: Bool
-} deriving (Eq, Ord, Show)
+} deriving (Eq, Ord)
+
+instance Show Gag where
+  show gag = concat
+    [if prestiged gag then "Pres " else ""
+    ,show (gagTrack gag)
+    ,show (gagDamage gag)]
 
 gagLevels :: [Int]
 gagLevels = [0 .. 7]
@@ -239,7 +245,10 @@ data Combo = Combo {
   comboDamage :: Int,
   comboGags :: [Gag]
   -- TODO starting gag
-} deriving Show
+} 
+
+instance Show Combo where
+  show (Combo damage gags) = intercalate "\t" $ [show damage, show gags]
 
 -- TODO DP
 comboRep :: Int -> [a] -> [[a]]
@@ -270,5 +279,4 @@ toonCombos = do
 
 main :: IO ()
 main = do
-  print . length $ cogCombos 2
-  print . length $ toonCombos
+  mapM_ print (cogCombos 2)
