@@ -67,79 +67,111 @@ countCogEffects :: Cog -> Int
 countCogEffects Cog { dazed = dazed, marked = marked, soaked = soaked } =
   sum $ map fromEnum [dazed, marked, soaked]
 
-damage :: Int -> State Cog ()
+type CogState = State Cog Bool
+
+damage :: Int -> CogState
 damage value = do
   cog <- get
   let multiplier = if marked cog then 1.1 else 1
   put cog { cogHP = mul multiplier value + cogHP cog }
+  return True
 
-trap :: Int -> State Cog ()
+isTrapped :: Cog -> Bool
+isTrapped cog = trapped cog /= 0
+
+trap :: Int -> CogState
 trap damage = do
   cog <- get
-  put cog { trapped = if trapped cog > 0 then 0 else damage }
+  let result = not (isTrapped cog)
+  put cog { trapped = if result then damage else 0 }
+  return result
 
-lure :: Int -> State Cog ()
+untrap :: CogState
+untrap = do
+  cog <- get
+  when (trapped cog == 0) undefined
+  put cog { trapped = 0 }
+  return True
+
+isLured :: Cog -> Bool
+isLured cog = lured cog /= 0
+
+lure :: Int -> CogState
 lure knockback = do
   cog <- get
-  if trapped cog > 0
-     then do
-       damage (trapped cog)
-       trap 0
-       daze
-     else put cog { lured = knockback }
+  let expr
+        | isLured cog = return False
+        | isTrapped cog = do
+            damage (trapped cog)
+            untrap
+            daze
+        | otherwise = do
+            put cog { lured = knockback } 
+            return True
+  expr
 
-unlure :: State Cog ()
+unlure :: CogState
 unlure = do
   cog <- get
+  when (lured cog == 0) undefined
   put cog { lured = 0 }
+  return True
 
-daze :: State Cog ()
+daze :: CogState
 daze = do
   cog <- get
   put cog { dazed = True }
+  return True
 
-mark :: State Cog ()
+mark :: CogState
 mark = do
   cog <- get
   put cog { marked = True }
+  return True
 
-soak :: State Cog ()
+soak :: CogState
 soak = do
   cog <- get
   put cog { soaked = True }
+  return True
 
-unsoak :: State Cog ()
+unsoak :: CogState
 unsoak = do
   cog <- get
+  unless (soaked cog) undefined
   put cog { soaked = False }
+  return True
 
-useGags :: [Gag] -> State Cog ()
-useGags = useGagTracks . groupGags
+useGags :: [Gag] -> CogState
+useGags gags = foldr1 (>>) (useGagTracks <$> groupGags gags)
   where
     -- use gags of the same track
-    useGagTracks [] = return ()
-    useGagTracks (gags : rest) = do
+    useGagTracks gags = do
       cog <- get 
       let addKnockback = map (lured cog +)
       case gagTrack (head gags) of
-           Trap -> if (length gags == 1 && trapped cog == 0)
+           Trap -> if (length gags == 1 && not (isTrapped cog))
              then do
                let gag = head gags
                    value = gagDamage gag
                if prestiged gag
                   then trap (1.2 `mul` value)
                   else trap value
-             else trap 0
+             else do
+               untrap
+               return False
            Lure -> do
              let gag = maximumBy (compare `on` gagDamage) gags
                  value = gagDamage gag
-             if prestiged gag
-                then let multiplier = 
-                           if gagLevel gag `mod` 2 == 0
-                              then 1.15
-                              else 1.25
-                     in lure (multiplier `mul` value)
-                else lure value
+             result <-
+               if prestiged gag
+                  then let multiplier = 
+                             if gagLevel gag `mod` 2 == 0
+                                then 1.15
+                                else 1.25
+                       in lure (multiplier `mul` value)
+                  else lure value
+             return (result && length gags == 1)
            Throw -> do
              damage $ combo `mul` sum (addKnockback values)
              mark
@@ -158,16 +190,13 @@ useGags = useGagTracks . groupGags
            Sound -> do
              damage (sum values)
              unlure
-           Drop -> when (lured cog == 0) $
-             let dropValue gag = multiplier `mul` gagDamage gag
-                   where
-                     multiplier | gagTrack gag /= Drop = undefined
-                                | prestiged gag && count > 1 = 1.10 + 0.05 * (count - 1)
-                                | otherwise = 1
-                       where
-                         count = fromIntegral $ countCogEffects cog
-             in damage (combo `mul` sum (map dropValue gags))
-      useGagTracks rest
+           Drop -> 
+             if isLured cog
+                then return False
+                else
+                  case sequence $ map (dropValue cog) gags of
+                       Nothing -> return False
+                       Just values -> damage (combo `mul` sum values)
       where
         values = gagDamage <$> gags
         track = gagTrack $ head gags
@@ -175,8 +204,19 @@ useGags = useGagTracks . groupGags
               | track == Throw = 1.2
               | track == Drop = 1.3
               | otherwise = 1
+        dropValue :: Cog -> Gag -> Maybe Int
+        dropValue cog gag = (`mul` gagDamage gag) <$> multiplier
+          where
+            multiplier | gagTrack gag /= Drop = undefined
+                       | prestiged gag =
+                           if count > 1 
+                              then Just $ 1.10 + 0.05 * (count - 1)
+                              else Nothing
+                       | otherwise = Just 1
+              where
+                count = fromIntegral $ countCogEffects cog
 
-useGag :: Gag -> State Cog ()
+useGag :: Gag -> CogState
 useGag = useGags . pure
 
 heal :: Int -> State Toon ()
@@ -207,14 +247,14 @@ comboRep 0 _ = [[]]
 comboRep _ [] = []
 comboRep k xxs@(x:xs) = ((x:) <$> comboRep (k-1) xxs) ++ comboRep k xs
 
--- TODO
--- ignore some combos (where some gags do nothing or deal 0 damage)
 cogCombos :: Int -> [Combo]
 cogCombos players = concatMap combosN [1 .. players]
   where
     combosN n = do
       gags <- comboRep n attackGags
-      let hp = cogHP $ execState (useGags gags) newCog
+      let (result, cog) = runState (useGags gags) newCog
+          hp = cogHP cog
+      guard result
       return (Combo hp gags)
       where
         attackGags = filter ((/= ToonUp) . gagTrack) gags
