@@ -17,7 +17,7 @@ data Gag = Gag {
   gagTrack :: GagTrack,
   gagLevel :: Int,
   prestiged :: Bool
-} deriving Show
+} deriving (Eq, Ord, Show)
 
 gagLevels :: [Int]
 gagLevels = [0 .. 7]
@@ -43,6 +43,9 @@ gags = do
   prestige <- [False, True]
   return $ Gag track level prestige 
   
+groupGags :: [Gag] -> [[Gag]]
+groupGags = groupBy ((==) `on` gagTrack) . sort
+
 data Toon = Toon { toonHP :: Int } deriving Show -- TODO effects
 
 newToon :: Toon
@@ -111,60 +114,65 @@ unsoak = do
   put cog { soaked = False }
 
 useGags :: [Gag] -> State Cog ()
-useGags gags = do
-  cog <- get 
-  let addKnockback = map (lured cog +)
-  case gagTrack (head gags) of
-       Trap -> if (length gags == 1 && trapped cog == 0)
-         then do
-           let gag = head gags
-               value = gagDamage gag
-           if prestiged gag
-              then trap (1.2 `mul` value)
-              else trap value
-         else trap 0
-       Lure -> do
-         let gag = maximumBy (compare `on` gagDamage) gags
-             value = gagDamage gag
-         if prestiged gag
-            then let multiplier = 
-                       if gagLevel gag `mod` 2 == 0
-                          then 1.15
-                          else 1.25
-                 in lure (multiplier `mul` value)
-            else lure value
-       Throw -> do
-         damage $ combo `mul` sum (addKnockback values)
-         mark
-         unlure
-       Squirt -> do
-         damage $ combo `mul` sum (addKnockback values)
-         soak
-         unlure
-       Zap -> do
-         if soaked cog
-            then do
-              damage (sum values)
-              unsoak
-              unlure
-            else unlure
-       Sound -> do
-         damage (sum values)
-         unlure
-       Drop -> when (lured cog == 0) $
-         let dropValue gag = multiplier `mul` gagDamage gag
-               where
-                 multiplier | gagTrack gag /= Drop = undefined
-                            | prestiged gag = 1.1 + 0.05 * (fromIntegral $ countCogEffects cog)
-                            | otherwise = 1
-         in damage (combo `mul` sum (map dropValue gags))
+useGags = useGagTracks . groupGags
   where
-    values = gagDamage <$> gags
-    track = gagTrack $ head gags
-    combo | length gags == 1 = 1
-          | track == Throw = 1.2
-          | track == Drop = 1.3
-          | otherwise = 1
+    -- use gags of the same track
+    useGagTracks [] = return ()
+    useGagTracks (gags : rest) = do
+      cog <- get 
+      let addKnockback = map (lured cog +)
+      case gagTrack (head gags) of
+           Trap -> if (length gags == 1 && trapped cog == 0)
+             then do
+               let gag = head gags
+                   value = gagDamage gag
+               if prestiged gag
+                  then trap (1.2 `mul` value)
+                  else trap value
+             else trap 0
+           Lure -> do
+             let gag = maximumBy (compare `on` gagDamage) gags
+                 value = gagDamage gag
+             if prestiged gag
+                then let multiplier = 
+                           if gagLevel gag `mod` 2 == 0
+                              then 1.15
+                              else 1.25
+                     in lure (multiplier `mul` value)
+                else lure value
+           Throw -> do
+             damage $ combo `mul` sum (addKnockback values)
+             mark
+             unlure
+           Squirt -> do
+             damage $ combo `mul` sum (addKnockback values)
+             soak
+             unlure
+           Zap -> do
+             if soaked cog
+                then do
+                  damage (sum values)
+                  unsoak
+                  unlure
+                else unlure
+           Sound -> do
+             damage (sum values)
+             unlure
+           Drop -> when (lured cog == 0) $
+             let dropValue gag = multiplier `mul` gagDamage gag
+                   where
+                     multiplier | gagTrack gag /= Drop = undefined
+                                | prestiged gag = 1.1 + 0.05 * (fromIntegral $ countCogEffects cog)
+                                | otherwise = 1
+             in damage (combo `mul` sum (map dropValue gags))
+      useGagTracks rest
+      where
+        values = gagDamage <$> gags
+        track = gagTrack $ head gags
+        combo | length gags == 1 = 1
+              | track == Throw = 1.2
+              | track == Drop = 1.3
+              | otherwise = 1
 
 useGag :: Gag -> State Cog ()
 useGag = useGags . pure
