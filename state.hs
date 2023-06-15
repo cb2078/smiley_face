@@ -162,8 +162,10 @@ useGags = useGagTracks . groupGags
              let dropValue gag = multiplier `mul` gagDamage gag
                    where
                      multiplier | gagTrack gag /= Drop = undefined
-                                | prestiged gag = 1.1 + 0.05 * (fromIntegral $ countCogEffects cog)
+                                | prestiged gag && count > 1 = 1.10 + 0.05 * (count - 1)
                                 | otherwise = 1
+                       where
+                         count = fromIntegral $ countCogEffects cog
              in damage (combo `mul` sum (map dropValue gags))
       useGagTracks rest
       where
