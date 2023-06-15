@@ -250,11 +250,10 @@ data Combo = Combo {
 instance Show Combo where
   show (Combo damage gags) = intercalate "\t" $ [show damage, show gags]
 
--- TODO DP
 comboRep :: Int -> [a] -> [[a]]
-comboRep 0 _ = [[]]
-comboRep _ [] = []
-comboRep k xxs@(x:xs) = ((x:) <$> comboRep (k-1) xxs) ++ comboRep k xs
+comboRep n = concat . take n . tail . foldr f ([[]] : repeat [])
+  where
+    f x = scanl1 $ (++) . map (x :)
 
 cogCombos :: Int -> [Combo]
 cogCombos players = concatMap combosN [1 .. players]
