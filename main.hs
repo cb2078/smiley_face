@@ -280,6 +280,7 @@ useGags gags = foldr1 (>>) (useGagTracks <$> groupGags gags)
              damage $ combo `mul` sum (addKnockback values)
              mark
              unlure
+             return noPrestiges
            Squirt -> do
              damage $ combo `mul` sum (addKnockback values)
              soak
@@ -294,6 +295,7 @@ useGags gags = foldr1 (>>) (useGagTracks <$> groupGags gags)
            Sound -> do
              damage (sum values)
              unlure
+             return noPrestiges
            Drop -> 
              if isLured cog
                 then return False
@@ -319,6 +321,7 @@ useGags gags = foldr1 (>>) (useGagTracks <$> groupGags gags)
                        | otherwise = Just 1
               where
                 count = fromIntegral $ countCogEffects cog
+        noPrestiges = all (not . prestiged) gags
 
 useGag :: Gag -> CogState
 useGag = useGags . pure
