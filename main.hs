@@ -291,7 +291,9 @@ useGags gags = foldr1 (>>) (useGagTracks <$> groupGags gags)
                   damage (sum values)
                   unsoak
                   unlure
-                else unlure
+                else do
+                  unlure
+                  return False
            Sound -> do
              damage (sum values)
              unlure
@@ -395,7 +397,7 @@ main :: IO ()
 main = do
   let players = 3
       combos :: [Combo]
-      combos = filter ((== 600) . comboDamage) $ (concat . take players) cogCombos
+      combos = filter ((== 234) . comboDamage) $ (concat . take players) cogCombos
   mapM_ print combos
   putChar '\n'
   mapM_ print $ otherCombos =<< combos
