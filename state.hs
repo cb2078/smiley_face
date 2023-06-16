@@ -35,12 +35,23 @@ instance Show Gag where
       baseValue = gagValues !! (fromEnum track) !! gagLevel gag
       jump
         | track /= Zap || value == baseValue = ""
-        | fromIntegral value < 1.1 / 2 = " SplitPool"
+        | fromIntegral value < presZapPool / 2 = " SplitPool"
         | otherwise = " Pool"
       splash =
         if track == Squirt && value /= baseValue
           then " Splash"
           else ""
+
+zapPool = 0.9
+presZapPool = 1.1
+soundWinded = 0.5
+soundEncore = 1.06
+presSoundEncore = 1.16
+presSingleLure = 1.15
+presGroupLure = 1.25
+presTrap = 1.2
+squirtSplash = 0.25
+presSquirtSplash = 0.5
 
 gagLevels :: [Int]
 gagLevels = [0 .. 7]
@@ -66,11 +77,11 @@ addMultiTargetGags :: Gag -> [Gag]
 addMultiTargetGags gag = gag :
   case gagTrack gag of
        Squirt ->
-         let multiplier = if prestiged gag then 0.5 else 0.25
+         let multiplier = if prestiged gag then presSquirtSplash else squirtSplash
          in return gag { gagDamage = multiplier `mul` gagDamage gag }  
        Zap -> do
          split <- [0.5, 1]
-         let multiplier = if prestiged gag then 1.1 else 0.9
+         let multiplier = if prestiged gag then presZapPool else zapPool
          return gag { gagDamage = (multiplier * split) `mul` gagDamage gag }
        _ -> []
 
@@ -199,7 +210,7 @@ useGags gags = foldr1 (>>) (useGagTracks <$> groupGags gags)
                let gag = head gags
                    value = gagDamage gag
                if prestiged gag
-                  then trap (1.2 `mul` value)
+                  then trap (presTrap `mul` value)
                   else trap value
              else do
                untrap
@@ -211,8 +222,8 @@ useGags gags = foldr1 (>>) (useGagTracks <$> groupGags gags)
                if prestiged gag
                   then let multiplier = 
                              if gagLevel gag `mod` 2 == 0
-                                then 1.15
-                                else 1.25
+                                then presSingleLure
+                                else presGroupLure
                        in lure (multiplier `mul` value)
                   else lure value
              return (result && length gags == 1)
