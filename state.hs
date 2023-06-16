@@ -4,7 +4,7 @@ import Data.List
 import Data.Function
 
 -- TODO
--- squirt splash / zap jump
+-- encore and ious
 
 -- how TTCC does decimal calculations
 mul :: Integral b => Rational -> b -> b
@@ -16,14 +16,29 @@ data GagTrack = ToonUp | Trap | Lure | Throw | Squirt | Zap | Sound | Drop
 data Gag = Gag {
   gagTrack :: GagTrack,
   gagLevel :: Int,
+  gagDamage :: Int,
   prestiged :: Bool
 } deriving (Eq, Ord)
 
 instance Show Gag where
   show gag = concat
     [if prestiged gag then "Pres " else ""
-    ,show (gagTrack gag)
-    ,show (gagDamage gag)]
+    ,show track
+    ,show baseValue
+    ,jump
+    ,splash]
+    where
+      track = gagTrack gag
+      value = gagDamage gag
+      baseValue = gagValues !! (fromEnum track) !! gagLevel gag
+      jump
+        | track /= Zap || value == baseValue = ""
+        | fromIntegral value < 1.1 / 2 = " SplitPool"
+        | otherwise = " Pool"
+      splash =
+        if track == Squirt && value /= baseValue
+          then " Splash"
+          else ""
 
 gagLevels :: [Int]
 gagLevels = [0 .. 7]
@@ -38,17 +53,31 @@ gagValues = [[12, 24, 30, 45, 60, 84, 90, 135], -- toon up
              [5, 10, 16, 23, 30, 50, 70, 90], -- sound
              [8, 12, 35, 56, 90, 140, 200, 250]] -- drop
 
-gagDamage :: Gag -> Int
-gagDamage gag = gagValues !! track !! gagLevel gag
-  where track = fromEnum $ gagTrack gag
-
 gags :: [Gag]
 gags = do
   track <- enumFrom ToonUp
   level <- gagLevels
   prestige <- [False, True]
-  return $ Gag track level prestige 
-  
+  return $ Gag track level (gagValues !! (fromEnum track) !! level) prestige 
+
+addMultiTargetGags :: Gag -> [Gag]
+addMultiTargetGags gag = gag :
+  case gagTrack gag of
+       Squirt ->
+         let multiplier = if prestiged gag then 0.5 else 0.25
+         in return gag { gagDamage = multiplier `mul` gagDamage gag }  
+       Zap -> do
+         split <- [0.5, 1]
+         let multiplier = if prestiged gag then 1.1 else 0.9
+         return gag { gagDamage = (multiplier * split) `mul` gagDamage gag }
+       _ -> []
+
+removeRedundantGags :: [Gag] -> [Gag]
+removeRedundantGags = filter $ \ gag -> not $ and
+  [gagTrack gag `elem` [Squirt, Zap]
+  ,prestiged gag
+  ,gagDamage gag == gagValues !! fromEnum (gagTrack gag) !! gagLevel gag]
+
 groupGags :: [Gag] -> [[Gag]]
 groupGags = groupBy ((==) `on` gagTrack) . sort
 
@@ -263,7 +292,10 @@ cogCombos players = do
   guard result
   return (Combo hp gags)
   where
-    attackGags = filter ((/= ToonUp) . gagTrack) gags
+    attackGags =
+      removeRedundantGags $
+      addMultiTargetGags =<<
+      filter ((/= ToonUp) . gagTrack) gags
 
 toonCombos :: [Combo]   
 toonCombos = do
@@ -276,6 +308,4 @@ toonCombos = do
 
 main :: IO ()
 main = do
-  let xs = cogCombos 2
-  print $ length xs
-  print $ length $ nub xs
+  print $ length $ cogCombos 2
