@@ -348,33 +348,31 @@ data Combo = Combo {
 instance Show Combo where
   show (Combo damage gags) = intercalate "\t" $ [show damage, show gags]
 
-comboRep :: Int -> [a] -> [[a]]
-comboRep n = concat . take n . tail . foldr f ([[]] : repeat [])
+comboRep :: [a] -> [[[a]]]
+comboRep = tail . foldr f ([[]] : repeat [])
   where
     f x = scanl1 $ (++) . map (x :)
 
--- TODO
--- memoization
--- make this [[Combo]] and index for number of players
-cogCombos :: Int -> [Combo]
-cogCombos players = do
-  gags <- sortGagGroups $ comboRep players attackGags
-  let (result, cog) = runState (useGags gags) newCog
-      hp = cogHP cog
-  guard result
-  return (Combo hp gags)
+cogCombos :: [[Combo]]
+cogCombos = map combosN (comboRep attackGags)
   where
+    combosN gagsN = do
+      gags <- sortGagGroups gagsN
+      let (result, cog) = runState (useGags gags) newCog
+          hp = cogHP cog
+      guard result
+      return (Combo hp gags)
     attackGags =
       removeRedundantGags $
       addMultiTargetGags =<<
       filter ((/= ToonUp) . gagTrack) gags
 
 -- TODO cases when number of gags < number of players
-otherCombos :: Int -> Combo -> [Combo]
-otherCombos players combo = filter pred (cogCombos players)
+otherCombos :: Combo -> [Combo]
+otherCombos combo = concat . take players $ map (filter pred) cogCombos
   where
+    players = length $ comboGags combo
     otherGags = otherGag =<< comboGags combo
-    sameGags = (== otherGags) . comboGags
     pred combo = comboGags combo == otherGags && comboDamage combo /= 0
 
 toonCombos :: [Combo]   
@@ -392,9 +390,10 @@ search hps combos = mapM_ print $
 
 main :: IO ()
 main = do
-  let players = 2
-      combos = filter ((==156) . comboDamage) $ cogCombos players
+  let players = 3
+      combos :: [Combo]
+      combos = filter ((== 600) . comboDamage) $ (concat . take players) cogCombos
   mapM_ print combos
   putChar '\n'
-  mapM_ print $ otherCombos players =<< combos
+  mapM_ print $ otherCombos =<< combos
 
