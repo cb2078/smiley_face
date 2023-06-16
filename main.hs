@@ -34,15 +34,22 @@ instance Show Gag where
       value = gagDamage gag
       baseValue = gagValues !! (fromEnum track) !! gagLevel gag
       jump
-        | track /= Zap || value == baseValue = ""
-        | fromIntegral value < presZapPool / 2 = " SplitPool"
-        | otherwise = " Pool"
-      splash =
-        if track == Squirt && value /= baseValue
-          then " Splash"
-          else ""
+        | isSplitPool gag = " SplitPool"
+        | isPool gag = " Pool"
+        | otherwise = ""
+      splash = if isSplash gag then " Splash" else ""
 
-zapPool = 0.9
+isSingleLure, isSplitPool, isPool, isSplash :: Gag -> Bool
+isSingleLure gag = gagTrack gag == Lure && 0 == gagLevel gag `mod` 2
+isSplitPool gag = gagTrack gag == Zap &&
+  fromIntegral (gagDamage gag) < presZapPool / 2
+isPool gag = and
+  [gagTrack gag == Zap
+  ,not $ isSplitPool gag
+  ,gagDamage gag /= baseDamage gag]
+isSplash gag = gagTrack gag == Squirt && gagDamage gag /= baseDamage gag
+
+zapPool = 0.9 
 presZapPool = 1.1
 soundWinded = 0.5
 soundEncore = 1.06
@@ -66,6 +73,10 @@ gagValues = [[12, 24, 30, 45, 60, 84, 90, 135], -- toon up
              [5, 10, 16, 23, 30, 50, 70, 90], -- sound
              [8, 12, 35, 56, 90, 140, 200, 250]] -- drop
 
+baseDamage :: Gag -> Int
+baseDamage Gag { gagLevel = level, gagTrack = track} =
+  gagValues !! fromEnum track !! level
+
 gags :: [Gag]
 gags = do
   track <- enumFrom ToonUp
@@ -78,23 +89,46 @@ pickGag track level prestige = Gag track level value prestige
   where
     value = gagValues !! fromEnum track !! level
 
+addSplash :: Gag -> [Gag]
+addSplash gag = do
+  guard $ gagTrack gag == Squirt
+  let multiplier = if prestiged gag then presSquirtSplash else squirtSplash
+  return gag { gagDamage = multiplier `mul` gagDamage gag }
+
+addPool :: Gag -> [Gag]
+addPool gag = do
+  guard $ gagTrack gag == Zap 
+  split <- [0.5, 1]
+  let multiplier = if prestiged gag then presZapPool else zapPool
+  return gag { gagDamage = (multiplier * split) `mul` gagDamage gag }
+
 addMultiTargetGags :: Gag -> [Gag]
-addMultiTargetGags gag = gag :
-  case gagTrack gag of
-       Squirt ->
-         let multiplier = if prestiged gag then presSquirtSplash else squirtSplash
-         in return gag { gagDamage = multiplier `mul` gagDamage gag }  
-       Zap -> do
-         split <- [0.5, 1]
-         let multiplier = if prestiged gag then presZapPool else zapPool
-         return gag { gagDamage = (multiplier * split) `mul` gagDamage gag }
-       _ -> []
+addMultiTargetGags gag = gag : addSplash gag ++ addPool gag
 
 removeRedundantGags :: [Gag] -> [Gag]
 removeRedundantGags = filter $ \ gag -> not $ and
   [gagTrack gag `elem` [Squirt, Zap]
   ,prestiged gag
-  ,gagDamage gag == gagValues !! fromEnum (gagTrack gag) !! gagLevel gag]
+  ,gagDamage gag == baseDamage gag]
+
+otherGag :: Gag -> [Gag]
+otherGag gag = do
+  case gagTrack gag of
+       Lure -> do
+         guard $ isSingleLure gag 
+         return gag
+       Squirt ->
+         if isSplash gag
+            then return baseGag
+            else addSplash gag
+       Zap ->
+         if isPool gag || isSplitPool gag
+            then return baseGag
+            else addPool gag
+       Sound -> return gag
+       _ -> []
+  where
+    baseGag = gag { gagDamage = baseDamage gag }
 
 groupGags :: [Gag] -> [[Gag]]
 groupGags = groupBy ((==) `on` gagTrack) . sort
@@ -236,7 +270,7 @@ useGags gags = foldr1 (>>) (useGagTracks <$> groupGags gags)
              result <-
                if prestiged gag
                   then let multiplier = 
-                             if gagLevel gag `mod` 2 == 0
+                             if isSingleLure gag
                                 then presSingleLure
                                 else presGroupLure
                        in lure (multiplier `mul` value)
@@ -319,6 +353,9 @@ comboRep n = concat . take n . tail . foldr f ([[]] : repeat [])
   where
     f x = scanl1 $ (++) . map (x :)
 
+-- TODO
+-- memoization
+-- make this [[Combo]] and index for number of players
 cogCombos :: Int -> [Combo]
 cogCombos players = do
   gags <- sortGagGroups $ comboRep players attackGags
@@ -331,6 +368,14 @@ cogCombos players = do
       removeRedundantGags $
       addMultiTargetGags =<<
       filter ((/= ToonUp) . gagTrack) gags
+
+-- TODO cases when number of gags < number of players
+otherCombos :: Int -> Combo -> [Combo]
+otherCombos players combo = filter pred (cogCombos players)
+  where
+    otherGags = otherGag =<< comboGags combo
+    sameGags = (== otherGags) . comboGags
+    pred combo = comboGags combo == otherGags && comboDamage combo /= 0
 
 toonCombos :: [Combo]   
 toonCombos = do
@@ -347,4 +392,9 @@ search hps combos = mapM_ print $
 
 main :: IO ()
 main = do
-  search [156] $ cogCombos 2
+  let players = 2
+      combos = filter ((==156) . comboDamage) $ cogCombos players
+  mapM_ print combos
+  putChar '\n'
+  mapM_ print $ otherCombos players =<< combos
+
