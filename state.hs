@@ -1,10 +1,12 @@
 import Control.Monad
 import Control.Monad.State
-import Data.List
 import Data.Function
+import Data.List
+import Data.Maybe
 
 -- TODO
 -- encore and ious
+-- tests
 
 -- how TTCC does decimal calculations
 mul :: Integral b => Rational -> b -> b
@@ -80,6 +82,13 @@ removeRedundantGags = filter $ \ gag -> not $ and
 
 groupGags :: [Gag] -> [[Gag]]
 groupGags = groupBy ((==) `on` gagTrack) . sort
+
+sortGagGroups :: [[Gag]] -> [[Gag]]
+sortGagGroups = sortBy $ on compare (sum . map priority)
+  where 
+    order = [4, 5, 6, 7, 3, 2, 1, 0]
+    priority gag = fromJust . lookup (gagLevel gag) $ zip order [0..]
+
 
 data Toon = Toon { toonHP :: Int } deriving Show -- TODO effects
 
@@ -286,7 +295,7 @@ comboRep n = concat . take n . tail . foldr f ([[]] : repeat [])
 
 cogCombos :: Int -> [Combo]
 cogCombos players = do
-  gags <- comboRep players attackGags
+  gags <- sortGagGroups $ comboRep players attackGags
   let (result, cog) = runState (useGags gags) newCog
       hp = cogHP cog
   guard result
@@ -308,4 +317,4 @@ toonCombos = do
 
 main :: IO ()
 main = do
-  print $ length $ cogCombos 2
+  mapM_ print . filter ((== 156) . comboDamage) $ cogCombos 2
