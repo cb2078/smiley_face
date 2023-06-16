@@ -71,7 +71,12 @@ gags = do
   track <- enumFrom ToonUp
   level <- gagLevels
   prestige <- [False, True]
-  return $ Gag track level (gagValues !! (fromEnum track) !! level) prestige 
+  return $ pickGag track level prestige
+
+pickGag :: GagTrack -> Int -> Bool -> Gag
+pickGag track level prestige = Gag track level value prestige
+  where
+    value = gagValues !! fromEnum track !! level
 
 addMultiTargetGags :: Gag -> [Gag]
 addMultiTargetGags gag = gag :
