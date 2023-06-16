@@ -245,7 +245,7 @@ data Combo = Combo {
   comboDamage :: Int,
   comboGags :: [Gag]
   -- TODO starting gag
-} 
+} deriving Eq
 
 instance Show Combo where
   show (Combo damage gags) = intercalate "\t" $ [show damage, show gags]
@@ -256,16 +256,14 @@ comboRep n = concat . take n . tail . foldr f ([[]] : repeat [])
     f x = scanl1 $ (++) . map (x :)
 
 cogCombos :: Int -> [Combo]
-cogCombos players = concatMap combosN [1 .. players]
+cogCombos players = do
+  gags <- comboRep players attackGags
+  let (result, cog) = runState (useGags gags) newCog
+      hp = cogHP cog
+  guard result
+  return (Combo hp gags)
   where
-    combosN n = do
-      gags <- comboRep n attackGags
-      let (result, cog) = runState (useGags gags) newCog
-          hp = cogHP cog
-      guard result
-      return (Combo hp gags)
-      where
-        attackGags = filter ((/= ToonUp) . gagTrack) gags
+    attackGags = filter ((/= ToonUp) . gagTrack) gags
 
 toonCombos :: [Combo]   
 toonCombos = do
@@ -278,4 +276,6 @@ toonCombos = do
 
 main :: IO ()
 main = do
-  mapM_ print (cogCombos 2)
+  let xs = cogCombos 2
+  print $ length xs
+  print $ length $ nub xs
