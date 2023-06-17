@@ -7,6 +7,9 @@ import Data.Maybe
 -- TODO
 -- encore and ious
 -- tests
+-- double trap duplicate
+-- merge cog state and toon state
+-- make TU work?
 
 -- how TTCC does decimal calculations
 mul :: Integral b => Rational -> b -> b
@@ -372,13 +375,13 @@ cogCombos = map combosN (comboRep attackGags)
       addMultiTargetGags =<<
       filter ((/= ToonUp) . gagTrack) gags
 
--- TODO cases when number of gags < number of players
-otherCombos :: Combo -> [Combo]
-otherCombos combo = concat . take players $ map (filter pred) cogCombos
+otherCombos :: Int -> Combo -> [Combo]
+otherCombos players combo = concat . take players $ map (filter pred) cogCombos
   where
-    players = length $ comboGags combo
-    otherGags = otherGag =<< comboGags combo
-    pred combo = comboGags combo == otherGags && comboDamage combo /= 0
+    otherGags = replicate (players - length (comboGags combo)) gags
+    gagsN = sequence . filter (not . null) $
+      otherGags ++ map otherGag (comboGags combo)
+    pred combo = comboGags combo `elem` gagsN && comboDamage combo /= 0
 
 toonCombos :: [Combo]   
 toonCombos = do
@@ -395,10 +398,10 @@ search hps combos = mapM_ print $
 
 main :: IO ()
 main = do
-  let players = 3
+  let players = 2
       combos :: [Combo]
-      combos = filter ((== 234) . comboDamage) $ (concat . take players) cogCombos
+      combos = filter ((== 200) . comboDamage) $ (concat . take players) cogCombos
   mapM_ print combos
   putChar '\n'
-  mapM_ print $ otherCombos =<< combos
+  mapM_ print $ otherCombos players =<< combos
 
