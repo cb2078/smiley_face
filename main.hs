@@ -366,7 +366,7 @@ cogCombos = map combosN (comboRep attackGags)
   where
     combosN gagsN = do
       gags <- sortGagGroups gagsN
-      let (result, cog) = runState (useGags gags) newCog
+      let (result, cog) = runState (soak >> useGags gags) newCog 
           hp = cogHP cog
       guard result
       return (Combo hp gags)
@@ -404,4 +404,3 @@ main = do
   mapM_ print combos
   putChar '\n'
   mapM_ print $ otherCombos players =<< combos
-
