@@ -174,87 +174,93 @@ countCogEffects :: Cog -> Int
 countCogEffects Cog { dazed = dazed, marked = marked, soaked = soaked } =
   sum $ map fromEnum [dazed, marked, soaked]
 
-type CogState = State Cog Bool
+type CogState = State (Cog, Bool)
 
-damage :: Int -> CogState
+getCog :: CogState Cog
+getCog = do
+  (cog, _) <- get
+  return cog
+
+putCog :: Cog -> CogState ()
+putCog cog = do
+  (_, result) <- get
+  put (cog, result)
+
+redundant :: CogState ()
+redundant = do
+  (cog, _) <- get
+  put (cog, False)
+
+damage :: Int -> CogState ()
 damage value = do
-  cog <- get
+  cog <- getCog
   let multiplier = if marked cog then 1.1 else 1
-  put cog { cogHP = mul multiplier value + cogHP cog }
-  return True
+  putCog cog { cogHP = mul multiplier value + cogHP cog }
 
 isTrapped :: Cog -> Bool
 isTrapped cog = trapped cog /= 0
 
-trap :: Int -> CogState
+trap :: Int -> CogState ()
 trap damage = do
-  cog <- get
+  cog <- getCog
   let result = not (isTrapped cog)
-  put cog { trapped = if result then damage else 0 }
-  return result
+  putCog cog { trapped = if result then damage else 0 }
 
-untrap :: CogState
+untrap :: CogState ()
 untrap = do
-  cog <- get
-  put cog { trapped = 0 }
-  return True
+  cog <- getCog
+  putCog cog { trapped = 0 }
 
 isLured :: Cog -> Bool
 isLured cog = lured cog /= 0
 
-lure :: Int -> CogState
+lure :: Int -> CogState ()
 lure knockback = do
-  cog <- get
+  cog <- getCog
   let expr
-        | isLured cog = return False
+        | isLured cog = redundant
         | isTrapped cog = do
             damage (trapped cog)
             untrap
             daze
-        | otherwise = do
-            put cog { lured = knockback } 
-            return True
+        | otherwise = putCog cog { lured = knockback } 
   expr
 
-unlure :: CogState
+unlure :: CogState ()
 unlure = do
-  cog <- get
-  put cog { lured = 0 }
-  return True
+  cog <- getCog
+  putCog cog { lured = 0 }
 
-daze :: CogState
+daze :: CogState ()
 daze = do
-  cog <- get
-  put cog { dazed = True }
-  return True
+  cog <- getCog
+  putCog cog { dazed = True }
 
-mark :: CogState
+mark :: CogState ()
 mark = do
-  cog <- get
-  put cog { marked = True }
-  return True
+  cog <- getCog
+  putCog cog { marked = True }
 
-soak :: CogState
+soak :: CogState ()
 soak = do
-  cog <- get
-  put cog { soaked = True }
-  return True
+  cog <- getCog
+  putCog cog { soaked = True }
 
-unsoak :: CogState
+unsoak :: CogState ()
 unsoak = do
-  cog <- get
+  cog <- getCog
   unless (soaked cog) undefined
-  put cog { soaked = False }
-  return True
+  putCog cog { soaked = False }
 
-useGags :: [Gag] -> CogState
+useGags :: [Gag] -> CogState ()
 useGags gags = foldr1 (>>) (useGagTracks <$> groupGags gags)
   where
     -- use gags of the same track
     useGagTracks gags = do
-      cog <- get 
+      cog <- getCog 
       let addKnockback = map (lured cog +)
       case gagTrack (head gags) of
+           -- TODO do the multiplie times instead of redundanting if there isn't 1 trap
            Trap -> if (length gags == 1 && not (isTrapped cog))
              then do
                let gag = head gags
@@ -264,24 +270,21 @@ useGags gags = foldr1 (>>) (useGagTracks <$> groupGags gags)
                   else trap value
              else do
                untrap
-               return False
+               redundant
            Lure -> do
              let gag = maximumBy (compare `on` gagDamage) gags
                  value = gagDamage gag
-             result <-
-               if prestiged gag
-                  then let multiplier = 
-                             if isSingleLure gag
-                                then presSingleLure
-                                else presGroupLure
-                       in lure (multiplier `mul` value)
-                  else lure value
-             return (result && length gags == 1)
+                 multiplier
+                   | prestiged gag = 1
+                   | isSingleLure gag = presSingleLure
+                   | otherwise = presGroupLure
+             lure (multiplier `mul` value)
+             unless (length gags == 1) redundant
            Throw -> do
              damage $ combo `mul` sum (addKnockback values)
              mark
              unlure
-             return noPrestiges
+             unless noPrestiges redundant
            Squirt -> do
              damage $ combo `mul` sum (addKnockback values)
              soak
@@ -294,18 +297,16 @@ useGags gags = foldr1 (>>) (useGagTracks <$> groupGags gags)
                   unlure
                 else do
                   unlure
-                  return False
+                  redundant
            Sound -> do
              damage (sum values)
              unlure
-             return noPrestiges
+             unless noPrestiges redundant
            Drop -> 
              if isLured cog
-                then return False
-                else
-                  case sequence $ map (dropValue cog) gags of
-                       Nothing -> return False
-                       Just values -> damage (combo `mul` sum values)
+                then redundant
+                else maybe redundant (damage . mul combo . sum) $
+                  sequence $ map (dropValue cog) gags
       where
         values = gagDamage <$> gags
         track = gagTrack $ head gags
@@ -326,7 +327,7 @@ useGags gags = foldr1 (>>) (useGagTracks <$> groupGags gags)
                 count = fromIntegral $ countCogEffects cog
         noPrestiges = all (not . prestiged) gags
 
-useGag :: Gag -> CogState
+useGag :: Gag -> CogState ()
 useGag = useGags . pure
 
 heal :: Int -> State Toon ()
@@ -364,7 +365,7 @@ cogCombos = map combosN (comboRep attackGags)
   where
     combosN gagsN = do
       gags <- sortGagGroups gagsN
-      let (result, cog) = runState (soak >> useGags gags) newCog 
+      let (cog, result) = execState (soak >> useGags gags) (newCog, False) 
           hp = cogHP cog
       guard result
       return (Combo hp gags)
