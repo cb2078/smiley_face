@@ -8,8 +8,6 @@ import Data.Maybe
 -- encore and ious
 -- tests
 -- double trap duplicate
--- merge cog state and toon state
--- make TU work?
 
 -- how TTCC does decimal calculations
 mul :: Integral b => Rational -> b -> b
@@ -86,6 +84,15 @@ gags = do
   level <- gagLevels
   prestige <- [False, True]
   return $ pickGag track level prestige
+
+healGags :: [Gag]
+healGags = filter isHeal gags
+  where
+    isHeal gag =
+      case gagTrack gag of
+           ToonUp -> True
+           Throw -> prestiged gag
+           _ -> False
 
 pickGag :: GagTrack -> Int -> Bool -> Gag
 pickGag track level prestige = Gag track level value prestige
@@ -335,16 +342,25 @@ heal value = do
   toon <- get
   put toon { toonHP = toonHP toon + value }
 
-useHeal :: Gag -> State Toon ()
-useHeal gag = do
-  toon <- get
+selfHeal :: Gag -> State Toon ()
+selfHeal gag = do
   case gagTrack gag of
        ToonUp ->
          let multiplier = if prestiged gag then 0.4 else 0.25
          in heal (multiplier `mul` value) 
-       Throw -> when (prestiged gag) (heal (0.25 `mul` value))
+       Throw ->
+         if prestiged gag
+            then heal (0.25 `mul` value)
+            else undefined
   where
     value = gagDamage gag
+
+-- TODO this should be less when there are 
+getHealed :: [Gag] -> State Toon ()
+getHealed gags =
+  if all ((== ToonUp) . gagTrack) gags
+     then heal (sum $ map gagDamage gags)
+     else undefined
 
 data Combo = Combo {
   comboDamage :: Int,
@@ -382,14 +398,40 @@ otherCombos players combo = concat . take players $ map (filter pred) cogCombos
       otherGags ++ map otherGag (comboGags combo)
     pred combo = comboGags combo `elem` gagsN && comboDamage combo /= 0
 
-toonCombos :: [Combo]   
-toonCombos = do
-  gag <- healGags
-  let hp = toonHP $ execState (useHeal gag) newToon
-  return (Combo hp [gag])
+data HealCombo = HealCombo {
+  comboHeal :: Int,
+  selfHealGag :: Maybe Gag,
+  otherHealGags :: [Gag]
+}
+
+instance Show HealCombo where
+  show (HealCombo heal self other) = concat
+    [show heal
+    ,"\t"
+    ,show other
+    ,"\t"
+    ,maybe "" show self]
+
+toonCombos :: [[HealCombo]]   
+toonCombos = zipWith (++) otherHealCombos combinedCombos
   where
-    healTracks = [ToonUp, Throw]
-    healGags = filter ((`elem` healTracks) . gagTrack) gags
+    run state = toonHP $ execState state newToon
+    -- no self heal
+    emptyCombo = HealCombo 0 Nothing []
+    otherHealCombos = map (map makeCombo) $ comboRep otherHealGags 
+      where
+        -- TODO rename other heal gags
+        otherHealGags = filter (not . prestiged) healGags
+        makeCombo gags = HealCombo (run (getHealed gags)) Nothing gags
+    -- has self heal
+    selfHealCombos = do
+      gag <- healGags
+      return $ HealCombo (run (selfHeal gag)) (Just gag) []
+    combine self other = HealCombo
+      (comboHeal self + comboHeal other)
+      (selfHealGag self)
+      (otherHealGags other)
+    combinedCombos = map (liftM2 combine selfHealCombos) ([emptyCombo] : otherHealCombos)
 
 search :: [Int] -> [Combo] -> IO ()
 search hps combos = mapM_ print $
