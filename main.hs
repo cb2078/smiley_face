@@ -196,7 +196,6 @@ trap damage = do
 untrap :: CogState
 untrap = do
   cog <- get
-  when (trapped cog == 0) undefined
   put cog { trapped = 0 }
   return True
 
@@ -220,7 +219,6 @@ lure knockback = do
 unlure :: CogState
 unlure = do
   cog <- get
-  when (lured cog == 0) undefined
   put cog { lured = 0 }
   return True
 
